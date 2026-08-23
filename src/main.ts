@@ -1,17 +1,21 @@
 // Boot: canvas, letterboxed scaling, fixed-timestep loop decoupled from render.
 import { CONFIG } from './config';
 import { makeCommander } from './commander';
-import { createInitialState, type Side } from './state';
+import { type Side } from './state';
+import { createInitialState } from './scenarios';
 import { stepSim, TICK_DT } from './sim';
 import { attachInput, createUiState, updateViewport } from './ui/input';
 import { drawHud } from './ui/hud';
 import { buildStaticLayer, drawWorld } from './render/draw';
+import { profilePaths, runMany, runScenario } from './devtools';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 
-const seed = Number(new URLSearchParams(location.search).get('seed') ?? 1);
-let state = createInitialState(seed);
+const params = new URLSearchParams(location.search);
+const seed = Number(params.get('seed') ?? 1);
+const scenario = params.get('scenario') ?? CONFIG.SCENARIO;
+let state = createInitialState(seed, scenario);
 const ui = createUiState();
 const commanders: Record<Side, ReturnType<typeof makeCommander>> = {
   US: makeCommander(() => state, 'US'),
@@ -71,8 +75,11 @@ requestAnimationFrame(frame);
   get state() { return state; },
   ui,
   commanders,
-  reset: (s: number) => { state = createInitialState(s); },
+  reset: (s: number, sc?: string) => { state = createInitialState(s, sc ?? state.scenario); },
   /** Advance the sim n ticks and redraw — used for headless/background-tab testing. */
   step: (n: number) => { for (let i = 0; i < n; i++) stepSim(state); render(); },
   render,
+  runScenario,
+  runMany,
+  profilePaths,
 };

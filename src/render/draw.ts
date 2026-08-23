@@ -2,7 +2,7 @@
 // The static map layer is rendered once to an offscreen canvas at 2× and blitted.
 import { CONFIG } from '../config';
 import type { MapData, Shape } from '../map/an_cuong';
-import type { GameState, Side, Squad } from '../state';
+import type { Dot, GameState, Side, Squad } from '../state';
 import type { UiState } from '../ui/input';
 import { fromAngle, type Vec } from '../vec';
 
@@ -155,6 +155,8 @@ function drawSquad(ctx: CanvasRenderingContext2D, state: GameState, sq: Squad): 
   for (let i = 0; i < sq.dotIds.length; i++) {
     const d = state.dots[sq.dotIds[i]!]!;
     if (!d.alive) continue;
+    if (sq.kind === 'tank') { drawTank(ctx, d, col); continue; }
+    if (sq.kind === 'artillery') { drawBattery(ctx, d, col); continue; }
     ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS, 0, Math.PI * 2);
     ctx.fillStyle = col; ctx.fill();
     if (d.slot === 0) { ctx.strokeStyle = C.leaderRing; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS + 1.5, 0, Math.PI * 2); ctx.stroke(); }
@@ -162,7 +164,83 @@ function drawSquad(ctx: CanvasRenderingContext2D, state: GameState, sq: Squad): 
     const f = fromAngle(d.facing, CONFIG.DOT_RADIUS + 2);
     ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(d.pos.x, d.pos.y); ctx.lineTo(d.pos.x + f.x, d.pos.y + f.y); ctx.stroke();
+    // "pinned" chevrons above suppressed dots
+    if (d.suppression > 0.5) {
+      ctx.strokeStyle = C.suppressed; ctx.lineWidth = 1.2;
+      const y0 = d.pos.y - CONFIG.DOT_RADIUS - 3;
+      for (let k = 0; k < (d.suppression > 0.85 ? 2 : 1); k++) {
+        const y = y0 - k * 3;
+        ctx.beginPath(); ctx.moveTo(d.pos.x - 3, y); ctx.lineTo(d.pos.x, y - 2.5); ctx.lineTo(d.pos.x + 3, y); ctx.stroke();
+      }
+    }
   }
+}
+
+function drawTank(ctx: CanvasRenderingContext2D, d: Dot, col: string): void {
+  ctx.save();
+  ctx.translate(d.pos.x, d.pos.y);
+  ctx.rotate(d.facing);
+  ctx.fillStyle = col; ctx.fillRect(-7, -5, 14, 10);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(-7, -5, 14, 10);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(11, 0); ctx.lineWidth = 2; ctx.stroke(); // gun
+  ctx.restore();
+  // hp bar
+  const w = 16, frac = Math.max(0, d.hp / d.maxHp);
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(d.pos.x - w / 2, d.pos.y - 10, w, 2.5);
+  ctx.fillStyle = frac > 0.5 ? '#7dd87d' : frac > 0.25 ? '#ffd23c' : '#ff5c4c'; ctx.fillRect(d.pos.x - w / 2, d.pos.y - 10, w * frac, 2.5);
+}
+
+function drawBattery(ctx: CanvasRenderingContext2D, d: Dot, col: string): void {
+  ctx.save();
+  ctx.translate(d.pos.x, d.pos.y);
+  ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(12 * Math.cos(-0.6), 12 * Math.sin(-0.6)); ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 7px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(`${d.shells}`, d.pos.x, d.pos.y + 7);
+}
+
+function drawEffects(ctx: CanvasRenderingContext2D, state: GameState): void {
+  for (const e of state.effects) {
+    const a = Math.max(0, e.ttl / e.max);
+    switch (e.kind) {
+      case 'tracer':
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = e.side === 'US' ? C.tracerUs : C.tracerPavn; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
+        break;
+      case 'flash':
+        ctx.globalAlpha = a;
+        ctx.fillStyle = C.flash; ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, 2.2, 0, Math.PI * 2); ctx.fill();
+        break;
+      case 'shell': {
+        // arc from gun to target: a dot that rises then falls
+        const t = 1 - a;
+        const x = e.from.x + (e.to.x - e.from.x) * t, y = e.from.y + (e.to.y - e.from.y) * t - Math.sin(t * Math.PI) * 40;
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = C.shell; ctx.beginPath(); ctx.arc(x, y, 1.8, 0, Math.PI * 2); ctx.fill();
+        // target zone ring grows faint as shell nears
+        ctx.globalAlpha = 0.35 * a; ctx.strokeStyle = C.impact; ctx.setLineDash([2, 2]);
+        ctx.beginPath(); ctx.arc(e.to.x, e.to.y, 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        break;
+      }
+      case 'impact': {
+        ctx.globalAlpha = a;
+        ctx.fillStyle = C.impact; ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, e.r * (1 - a * 0.5), 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = a * 0.8; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, e.r * (1.4 - a * 0.4), 0, Math.PI * 2); ctx.stroke();
+        break;
+      }
+      case 'death':
+        ctx.globalAlpha = a * 0.9;
+        ctx.strokeStyle = sideColor(e.side); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(e.pos.x - 3, e.pos.y - 3); ctx.lineTo(e.pos.x + 3, e.pos.y + 3);
+        ctx.moveTo(e.pos.x + 3, e.pos.y - 3); ctx.lineTo(e.pos.x - 3, e.pos.y + 3); ctx.stroke();
+        break;
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
 export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvasElement, state: GameState, ui: UiState): void {
@@ -210,6 +288,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
   }
 
   for (const sq of state.squads) drawSquad(ctx, state, sq);
+  drawEffects(ctx, state);
 
   ctx.restore();
 }

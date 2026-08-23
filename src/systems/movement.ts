@@ -2,8 +2,9 @@
 // smoothing) + per-dot movement with terrain speed, formation slots and separation.
 import { CONFIG } from '../config';
 import { cellCenter, cellOf, isWalkable, speedAt, type TerrainGrid } from '../map/grid';
-import { formationOffset, squadCentroid, type Dot, type GameState, type Squad } from '../state';
+import { formationOffset, squadCentroid, squadsInOrder, type Dot, type GameState, type Squad } from '../state';
 import { dist, norm, sub, v, type Vec } from '../vec';
+import { rangeFor, threatDirection } from './squad_ai';
 
 // ---------- A* ----------
 
@@ -13,43 +14,43 @@ class MinHeap {
   get size() { return this.keys.length; }
   push(k: number, val: number) {
     const ks = this.keys, vs = this.vals;
+    let i = ks.length;
     ks.push(k); vs.push(val);
-    let i = ks.length - 1;
     while (i > 0) {
       const p = (i - 1) >> 1;
-      if (ks[p]! <= ks[i]!) break;
-      [ks[p], ks[i]] = [ks[i]!, ks[p]!];
-      [vs[p], vs[i]] = [vs[i]!, vs[p]!];
+      const pk = ks[p]!;
+      if (pk <= k) break;
+      ks[i] = pk; vs[i] = vs[p]!;
       i = p;
     }
+    ks[i] = k; vs[i] = val;
   }
   pop(): number {
     const ks = this.keys, vs = this.vals;
     const top = vs[0]!;
     const lk = ks.pop()!, lv = vs.pop()!;
-    if (ks.length) {
-      ks[0] = lk; vs[0] = lv;
+    const n = ks.length;
+    if (n) {
       let i = 0;
       for (;;) {
         const l = i * 2 + 1, r = l + 1;
-        let m = i;
-        if (l < ks.length && ks[l]! < ks[m]!) m = l;
-        if (r < ks.length && ks[r]! < ks[m]!) m = r;
-        if (m === i) break;
-        [ks[m], ks[i]] = [ks[i]!, ks[m]!];
-        [vs[m], vs[i]] = [vs[i]!, vs[m]!];
+        let m = -1, mk = lk;
+        if (l < n && ks[l]! < mk) { m = l; mk = ks[l]!; }
+        if (r < n && ks[r]! < mk) { m = r; mk = ks[r]!; }
+        if (m < 0) break;
+        ks[i] = mk; vs[i] = vs[m]!;
         i = m;
       }
+      ks[i] = lk; vs[i] = lv;
     }
     return top;
   }
 }
 
 const SQRT2 = Math.SQRT2;
-const NEIGH: ReadonlyArray<readonly [number, number, number]> = [
-  [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
-  [1, 1, SQRT2], [1, -1, SQRT2], [-1, 1, SQRT2], [-1, -1, SQRT2],
-];
+const NDC = [1, -1, 0, 0, 1, 1, -1, -1];
+const NDR = [0, 0, 1, -1, 1, -1, 1, -1];
+const NSTEP = [1, 1, 1, 1, SQRT2, SQRT2, SQRT2, SQRT2];
 
 /** Path cost for entering a cell: time cost, discounted for cover so squads prefer it (bible §10.1). */
 function enterCost(g: TerrainGrid, i: number, vehicle: boolean): number {
@@ -93,16 +94,35 @@ function nearestWalkableCell(g: TerrainGrid, p: Vec, vehicle: boolean): number {
   return -1;
 }
 
+// Reusable A* buffers (one search at a time; sim is single-threaded). A stamp array
+// replaces per-call fills so a search costs O(cells touched), not O(all cells).
+let bufN = 0;
+let gScore = new Float64Array(0);
+let came = new Int32Array(0);
+let stamp = new Uint32Array(0);
+let closedStamp = new Uint32Array(0);
+let searchId = 0;
+function ensureBuffers(n: number): void {
+  if (bufN === n) return;
+  bufN = n;
+  gScore = new Float64Array(n);
+  came = new Int32Array(n);
+  stamp = new Uint32Array(n);
+  closedStamp = new Uint32Array(n);
+  searchId = 0;
+}
+
 /** Returns world-space waypoints from `from` to `to` (excluding `from`, ending at `to`), or [] if unreachable. */
 export function findPath(g: TerrainGrid, from: Vec, to: Vec, vehicle = false): Vec[] {
   const start = nearestWalkableCell(g, from, vehicle);
   const goal = nearestWalkableCell(g, to, vehicle);
   if (start < 0 || goal < 0) return [];
   const cols = g.cols, rows = g.rows, n = cols * rows;
-  const gScore = new Float64Array(n).fill(Infinity);
-  const came = new Int32Array(n).fill(-1);
-  const closed = new Uint8Array(n);
-  const hScale = heuristicScale(g, vehicle);
+  ensureBuffers(n);
+  searchId++;
+  if (searchId === 0xffffffff) { stamp.fill(0); closedStamp.fill(0); searchId = 1; }
+  const sid = searchId;
+  const hScale = heuristicScale(g, vehicle) * CONFIG.PATH_HEURISTIC_WEIGHT;
   const gc = goal % cols, gr = (goal / cols) | 0;
   const h = (i: number) => {
     const c = i % cols, r = (i / cols) | 0;
@@ -110,29 +130,32 @@ export function findPath(g: TerrainGrid, from: Vec, to: Vec, vehicle = false): V
     return (Math.max(dx, dy) + (SQRT2 - 1) * Math.min(dx, dy)) * hScale;
   };
   const open = new MinHeap();
-  gScore[start] = 0;
+  gScore[start] = 0; stamp[start] = sid; came[start] = -1;
   open.push(h(start), start);
   const costs = vehicle ? g.vehCost : g.infCost;
   let found = false;
   while (open.size) {
     const cur = open.pop();
     if (cur === goal) { found = true; break; }
-    if (closed[cur]) continue;
-    closed[cur] = 1;
+    if (closedStamp[cur] === sid) continue;
+    closedStamp[cur] = sid;
     const cc = cur % cols, cr = (cur / cols) | 0;
-    for (const [dc, dr, step] of NEIGH) {
+    const gCur = gScore[cur]!;
+    for (let k = 0; k < 8; k++) {
+      const dc = NDC[k]!, dr = NDR[k]!, step = NSTEP[k]!;
       const nc = cc + dc, nr = cr + dr;
       if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
       const ni = nr * cols + nc;
-      if (closed[ni]) continue;
+      if (closedStamp[ni] === sid) continue;
       const ec = enterCost(g, ni, vehicle);
       if (ec === Infinity) continue;
       // no corner cutting past impassable cells
       if (dc !== 0 && dr !== 0) {
         if (costs[cr * cols + nc] === Infinity || costs[nr * cols + cc] === Infinity) continue;
       }
-      const ng = gScore[cur]! + step * ec;
-      if (ng < gScore[ni]!) {
+      const ng = gCur + step * ec;
+      if (stamp[ni] !== sid || ng < gScore[ni]!) {
+        stamp[ni] = sid;
         gScore[ni] = ng;
         came[ni] = cur;
         open.push(ng + h(ni), ni);
@@ -155,7 +178,7 @@ export function findPath(g: TerrainGrid, from: Vec, to: Vec, vehicle = false): V
  *  (so a path routed through woods for cover stays in the woods). */
 function segmentOk(g: TerrainGrid, a: Vec, b: Vec, vehicle: boolean): boolean {
   const d = dist(a, b);
-  const steps = Math.max(1, Math.ceil(d / (g.cell * 0.5)));
+  const steps = Math.max(1, Math.ceil(d / (g.cell * 0.7)));
   const ca = cellOf(g, a);
   const coverA = g.cover[ca.r * g.cols + ca.c];
   // perpendicular clearance offsets so smoothed paths do not hug corners/bridge edges
@@ -179,11 +202,9 @@ function smoothPath(g: TerrainGrid, from: Vec, pts: Vec[], vehicle: boolean): Ve
   let anchor = from;
   let i = 0;
   while (i < pts.length) {
-    // farthest j such that anchor→pts[j] is ok
+    // greedy forward: extend the shortcut while the straight segment stays clear
     let j = i;
-    for (let k = pts.length - 1; k > i; k--) {
-      if (segmentOk(g, anchor, pts[k]!, vehicle)) { j = k; break; }
-    }
+    while (j + 1 < pts.length && segmentOk(g, anchor, pts[j + 1]!, vehicle)) j++;
     out.push(pts[j]!);
     anchor = pts[j]!;
     i = j + 1;
@@ -193,21 +214,61 @@ function smoothPath(g: TerrainGrid, from: Vec, pts: Vec[], vehicle: boolean): Ve
 
 // ---------- Squad path management ----------
 
-function squadGoal(squad: Squad): Vec | null {
-  return squad.marker ? squad.marker.pos : null;
+/** Defend marker: occupy the nearest cover within DEFEND_COVER_SEARCH_R, preferring cover-edge
+ *  cells that face enemy territory (bible §10.1). Falls back to the marker itself. */
+function defendSpot(state: GameState, squad: Squad, marker: Vec): Vec {
+  const g = state.grid;
+  const R = CONFIG.DEFEND_COVER_SEARCH_R;
+  const span = Math.ceil(R / g.cell);
+  const { c, r } = cellOf(g, marker);
+  const td = threatDirection(state, squad, marker);
+  // neighbour step (8-dir) toward the threat
+  const enemyDx = Math.abs(td.x) >= 0.38 ? Math.sign(td.x) : 0;
+  const enemyDy = Math.abs(td.y) >= 0.38 ? Math.sign(td.y) : 0;
+  let best: Vec | null = null, bestScore = Infinity;
+  for (let dr = -span; dr <= span; dr++) for (let dc = -span; dc <= span; dc++) {
+    const cc = c + dc, rr = r + dr;
+    if (cc < 0 || rr < 0 || cc >= g.cols || rr >= g.rows) continue;
+    const i = rr * g.cols + cc;
+    if (!g.cover[i] || g.infCost[i] === Infinity) continue;
+    const q = cellCenter(g, cc, rr);
+    const d = dist(q, marker);
+    if (d > R) continue;
+    const ec = cc + enemyDx, er = rr + enemyDy;
+    const isEdge = ec < 0 || ec >= g.cols || er < 0 || er >= g.rows || !g.cover[er * g.cols + ec];
+    const score = d + (isEdge ? 0 : CONFIG.DEFEND_EDGE_BONUS);
+    if (score < bestScore) { best = q; bestScore = score; }
+  }
+  return best ?? marker;
+}
+
+/** Where the squad is actually trying to go right now. */
+export function resolveGoal(state: GameState, squad: Squad): Vec | null {
+  if (squad.fallback) return squad.fallback;
+  if (!squad.marker) return null;
+  if (squad.marker.kind === 'defend') {
+    const m = squad.marker.pos;
+    if (squad.defendCache && squad.defendCache.marker.x === m.x && squad.defendCache.marker.y === m.y) return squad.defendCache.spot;
+    const spot = defendSpot(state, squad, m);
+    squad.defendCache = { marker: v(m.x, m.y), spot };
+    return spot;
+  }
+  return squad.marker.pos;
 }
 
 export function updateSquadPaths(state: GameState): void {
-  for (const squad of state.squads) {
-    const goal = squadGoal(squad);
+  for (const squad of squadsInOrder(state)) {
+    if (squad.kind === 'artillery') continue; // batteries are static
+    const goal = resolveGoal(state, squad);
     if (!goal) { squad.path = []; squad.pathGoal = null; continue; }
     if (squad.pathGoal && squad.pathGoal.x === goal.x && squad.pathGoal.y === goal.y) continue;
     const c = squadCentroid(state, squad);
     if (!c) continue;
     squad.path = findPath(state.grid, c, goal, squad.kind === 'tank');
     squad.pathGoal = v(goal.x, goal.y);
-    for (const id of squad.dotIds) state.dots[id]!.wp = 0;
-    squad.state = squad.path.length ? 'MOVING' : 'IDLE';
+    if (squad.path.length) { const p0 = squad.path[0]!; if (dist(p0, c) > 1) squad.heading = Math.atan2(p0.y - c.y, p0.x - c.x); }
+    for (const id of squad.dotIds) { const d = state.dots[id]!; d.wp = 0; d.detour = null; }
+    if (squad.state === 'IDLE' || squad.state === 'MOVING') squad.state = squad.path.length ? 'MOVING' : 'IDLE';
   }
 }
 
@@ -233,16 +294,47 @@ function moveBlocked(g: TerrainGrid, dot: Dot, np: Vec, vehicle: boolean): boole
 
 export function updateMovement(state: GameState, dt: number): void {
   const g = state.grid;
-  for (const squad of state.squads) {
-    if (!squad.path.length) continue;
+  for (const squad of squadsInOrder(state)) {
+    if (squad.kind === 'artillery') continue;
     const vehicle = squad.kind === 'tank';
     const base = dotSpeed(squad);
     const n = squad.dotIds.length;
+    const pinned = squad.state === 'SUPPRESSED';
     let anyMoving = false;
     for (const id of squad.dotIds) {
       const dot = state.dots[id]!;
       if (!dot.alive) continue;
+      dot.moving = false;
       if (dot.detourCooldown > 0) dot.detourCooldown--;
+      const suppMult = 1 - CONFIG.SUPPRESS_SPEED_MULT_MAX * dot.suppression;
+
+      // Engaging dots halt (bible §9.1) — except for a short step into adjacent cover.
+      if (dot.coverSeek) {
+        const toC = sub(dot.coverSeek, dot.pos);
+        const d = Math.hypot(toC.x, toC.y);
+        if (d <= 1.5) { dot.coverSeek = null; continue; }
+        const sp = base * speedAt(g, dot.pos, vehicle) * suppMult;
+        const dir = norm(toC);
+        dot.moving = true;
+        if (!moveBlocked(g, dot, v(dot.pos.x + dir.x * Math.min(d, sp * dt), dot.pos.y + dir.y * Math.min(d, sp * dt)), vehicle)) dot.coverSeek = null;
+        continue;
+      }
+      if (pinned) continue;
+      if (dot.targetId >= 0) {
+        // Defenders halt where they stand; attackers keep closing on their target until comfortably inside range.
+        if (!squad.marker || squad.marker.kind !== 'attack' || squad.fallback) continue;
+        const tgt = state.dots[dot.targetId]!;
+        const r = rangeFor(state, dot, tgt) * CONFIG.ENGAGE_STOP_FRACTION;
+        const toE = sub(tgt.pos, dot.pos);
+        const dE = Math.hypot(toE.x, toE.y);
+        if (dE <= r + 1 || enemyWithin(state, dot, CONFIG.ENGAGE_MIN_DIST)) continue; // +1px hysteresis: no jitter at the boundary
+        const sp = base * speedAt(g, dot.pos, vehicle) * suppMult;
+        const dir = norm(toE);
+        dot.moving = true;
+        dot.facing = Math.atan2(dir.y, dir.x);
+        moveBlocked(g, dot, v(dot.pos.x + dir.x * Math.min(dE - r, sp * dt), dot.pos.y + dir.y * Math.min(dE - r, sp * dt)), vehicle);
+        continue;
+      }
       if (dot.wp >= squad.path.length) continue;
       const isLast = dot.wp === squad.path.length - 1;
       const wpPos = squad.path[dot.wp]!;
@@ -255,7 +347,7 @@ export function updateMovement(state: GameState, dt: number): void {
       } else {
         dot.detour = null;
         // Formation slot offset — only when the offset position is walkable.
-        const off = formationOffset(dot.slot, n);
+        const off = formationOffset(dot.slot, n, squad.heading);
         target = v(wpPos.x + off.x, wpPos.y + off.y);
         if (!isWalkable(g, target, vehicle)) target = wpPos;
         arriveR = isLast ? CONFIG.MARKER_ARRIVE_R : CONFIG.WAYPOINT_ARRIVE_R;
@@ -268,7 +360,8 @@ export function updateMovement(state: GameState, dt: number): void {
         continue;
       }
       anyMoving = true;
-      const sp = base * speedAt(g, dot.pos, vehicle) * (1 - 0.5 * dot.suppression);
+      dot.moving = true;
+      const sp = base * speedAt(g, dot.pos, vehicle) * suppMult;
       const stepLen = Math.min(d, sp * dt);
       const dir = norm(toT);
       dot.facing = Math.atan2(dir.y, dir.x);
@@ -280,15 +373,26 @@ export function updateMovement(state: GameState, dt: number): void {
       }
     }
     if (!anyMoving && squad.state === 'MOVING') squad.state = 'IDLE';
+    else if (anyMoving && squad.state === 'IDLE') squad.state = 'MOVING';
   }
   applySeparation(state, dt);
 }
 
-/** Same-side dots push apart so a squad never collapses into a single pixel. */
+function enemyWithin(state: GameState, dot: Dot, r: number): boolean {
+  const r2 = r * r;
+  for (const e of state.dots) {
+    if (!e.alive || e.side === dot.side) continue;
+    const dx = e.pos.x - dot.pos.x, dy = e.pos.y - dot.pos.y;
+    if (dx * dx + dy * dy <= r2) return true;
+  }
+  return false;
+}
+
+/** Dots push apart so a squad never collapses into a single pixel (applies to enemies too — no overlapping blobs). */
 function applySeparation(state: GameState, dt: number): void {
-  const R = CONFIG.DOT_SEPARATION;
-  const R2 = R * R;
   const F = CONFIG.DOT_SEPARATION_FORCE * dt;
+  const RE = CONFIG.ENEMY_SEPARATION, RE2 = RE * RE;
+  const RS = CONFIG.DOT_SEPARATION, RS2 = RS * RS;
   const dots = state.dots;
   const g = state.grid;
   for (let i = 0; i < dots.length; i++) {
@@ -296,13 +400,16 @@ function applySeparation(state: GameState, dt: number): void {
     if (!a.alive) continue;
     for (let j = i + 1; j < dots.length; j++) {
       const b = dots[j]!;
-      if (!b.alive || a.side !== b.side) continue;
+      if (!b.alive) continue;
       const dx = b.pos.x - a.pos.x;
       const dy = b.pos.y - a.pos.y;
       const d2 = dx * dx + dy * dy;
-      if (d2 >= R2) continue;
+      const enemy = a.side !== b.side;
+      const R = enemy ? RE : RS;
+      if (d2 >= (enemy ? RE2 : RS2)) continue;
       const d = Math.sqrt(d2) || 0.001;
-      const push = ((R - d) / R) * F;
+      // enemies get shoved apart hard (never overlap); friends drift apart gently
+      const push = enemy ? Math.max((R - d) / 2, ((R - d) / R) * F) : ((R - d) / R) * F;
       const nx = d > 0.001 ? dx / d : 1, ny = d > 0.001 ? dy / d : 0;
       const ap = v(a.pos.x - nx * push, a.pos.y - ny * push);
       const bp = v(b.pos.x + nx * push, b.pos.y + ny * push);

@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "headless": "esbuild scripts/headless.ts --bundle --platform=node --format=esm --outfile=.headless/headless.mjs --log-level=warning && node .headless/headless.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

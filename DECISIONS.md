@@ -12,3 +12,16 @@ Ambiguities resolved while building. Each is the simplest reading of the bible, 
 - **Debug control of both sides** (`DEBUG_CONTROL_BOTH_SIDES`) is on for Phase 1–2 verification and must be turned off when the commander AI lands in Phase 4.
 - **Extra files** beyond the prescribed layout: `src/commander.ts` (CommanderInterface + command queue), `src/map/grid.ts` (terrain raster shared by movement/vision/combat), `src/sim.ts` (tick order), `src/vec.ts`, `src/rng.ts`.
 - **Headless hook.** `window.tacmap.step(n)` advances the sim deterministically without rAF (background tabs throttle rAF), used for verification scripts.
+
+## Phase 2
+
+- **Halt, face, fire is per dot.** A dot with a target does not move (no firing on the move). Dots following an *attack* marker keep closing on their target until it is within `ENGAGE_STOP_FRACTION` × range (and never while any enemy is inside `ENGAGE_MIN_DIST`); defend-marker dots halt where they stand. Hard `ENEMY_SEPARATION` floor between opposing dots as anti-blob insurance.
+- **Target choice spreads fire:** a dot picks randomly among in-range enemies no farther than `TARGET_PICK_SLACK` × the nearest, and keeps its target while valid.
+- **AT squads:** slots 1..`AT_GUNNERS_PER_SQUAD` (2) carry the AT weapon; the rest are riflemen. Only AT gunners and tanks can target armour; plain infantry ignore tanks entirely (cannot damage them).
+- **Tank concealment penalty:** a tank can only target a unit in cover within `TANK_COVER_SPOT_RANGE` (60px). Side-level fog arrives in Phase 3.
+- **Suppression** is per incoming shot (hit or miss), decays linearly over `SUPPRESS_DECAY_S`; vehicles immune. Squad avg above `SUPPRESS_PIN_THRESHOLD` → `SUPPRESSED` (holds position, keeps firing).
+- **FALLBACK** (unspecified in the bible): pinned *and* at/below `FALLBACK_STRENGTH_FRACTION` alive → run `FALLBACK_DISTANCE` directly away from the local enemy mass, not shooting; resume the marker once suppression drops below `FALLBACK_RECOVER_SUPPRESSION`. Defend-marker squads already in cover hold instead (`FALLBACK_DEFENDERS_IN_COVER`).
+- **Defend spots** prefer cover cells on the edge facing the *threat direction* (nearest enemy dot, else enemy HQ), weighted by `DEFEND_EDGE_BONUS`. Idle defenders face the threat direction.
+- **Artillery battery** is a static 1-dot "squad" drafted like any unit, firing `ARTY_SHELLS` at its attack marker zone with scatter `ARTY_ZONE_R`; shells take `ARTY_FLIGHT_TIME` and splash/suppress on impact. Vision gating ("blind without spotters") is deferred to Phase 3's fog.
+- **Determinism hygiene:** squads are processed in alternating order each tick, all squads scan for targets on the same ticks, and formation rings rotate with the squad's heading (spawned that way too) — each of these removed a measurable positional/ordering win bias found by the headless suite (`npm run headless -- all 200`).
+- **A\*** uses a 2% heuristic weight for tie-breaking and greedy-forward string-pull smoothing; ~0.4 ms per cross-map path in Node.
