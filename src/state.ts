@@ -41,7 +41,7 @@ export interface Dot {
 }
 
 export type Effect =
-  | { kind: 'tracer'; a: Vec; b: Vec; side: Side; ttl: number; max: number }
+  | { kind: 'tracer'; a: Vec; b: Vec; side: Side; ttl: number; max: number; flank?: boolean }
   | { kind: 'flash'; pos: Vec; side: Side; ttl: number; max: number }
   | { kind: 'shell'; from: Vec; to: Vec; ttl: number; max: number }
   | { kind: 'impact'; pos: Vec; r: number; ttl: number; max: number }
@@ -220,9 +220,12 @@ export function createSquad(state: GameState, side: Side, kind: SquadKind, label
  *  rotates with the squad's heading so the formation is symmetric for both directions of travel. */
 export function formationOffset(slot: number, n: number, heading = 0): Vec {
   if (n <= 1 || slot === 0) return v(0, 0);
-  const ringCount = n - 1;
-  const t = heading + ((slot - 1) / ringCount) * Math.PI * 2;
-  return fromAngle(t, CONFIG.FORMATION_RADIUS);
+  // staggered wedge: leader at the tip, ranks fan out behind and to either side
+  const rank = Math.ceil(slot / 2);
+  const side = slot % 2 === 1 ? -1 : 1;
+  const f = fromAngle(heading, -rank * CONFIG.FORMATION_DEPTH);
+  const l = fromAngle(heading + Math.PI / 2, side * rank * CONFIG.FORMATION_WIDTH);
+  return v(f.x + l.x, f.y + l.y);
 }
 
 export function createEmptyState(seed: number, scenario: string): GameState {

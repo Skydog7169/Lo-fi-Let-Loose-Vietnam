@@ -50,15 +50,17 @@ export const CONFIG = {
   } as Record<string, boolean>,
 
   // ---- Units ----
-  INFANTRY_SPEED: 45, // px/s at 100% terrain
-  RECON_SPEED: 50,
-  TANK_SPEED: 60,
+  // tempo: slowed ~15% from the first cut (playtest: 'slow the speed of play down some')
+  INFANTRY_SPEED: 38, // px/s at 100% terrain
+  RECON_SPEED: 42,
+  TANK_SPEED: 52,
   SQUAD_SIZE: { infantry: 6, at: 6, recon: 4, tank: 1, artillery: 1 } as Record<string, number>,
   DOT_HP: 100,
   TANK_HP: 600,
-  DOT_RADIUS: 3,
-  FORMATION_RADIUS: 11, // px ring around squad centre for member slots
-  DOT_SEPARATION: 7, // px; same-side dots push apart below this
+  DOT_RADIUS: 2.5,
+  FORMATION_WIDTH: 9, // wedge: lateral step per rank (px)
+  FORMATION_DEPTH: 8, // wedge: rank depth behind the leader (px)
+  DOT_SEPARATION: 10, // px; same-side dots push apart below this
   DOT_SEPARATION_FORCE: 30, // px/s
   WAYPOINT_ARRIVE_R: 6,
   MARKER_ARRIVE_R: 10,
@@ -69,16 +71,16 @@ export const CONFIG = {
   AT_RANGE_VS_ARMOR: 90,
   TANK_RANGE: 150,
   TANK_COVER_SPOT_RANGE: 60, // tanks only see concealed infantry this close (woods spotting penalty)
-  INF_FIRE_INTERVAL: 0.6, // s between shots per dot
+  INF_FIRE_INTERVAL: 0.75, // s between shots per dot
   INF_HIT_CHANCE: 0.13,
   INF_DAMAGE: 20,
   RECON_DAMAGE_MULT: 0.7, // recon squads are weaker in fights
   AT_GUNNERS_PER_SQUAD: 2, // slots 1..N of an AT squad carry the AT weapon
-  AT_FIRE_INTERVAL: 2.0,
+  AT_FIRE_INTERVAL: 2.4,
   AT_HIT_CHANCE: 0.6,
   AT_DAMAGE: 150,
   // tank: HE rounds vs infantry (area), AP vs armour. Tanks stand off — they never push/close like infantry.
-  TANK_HE_FIRE_INTERVAL: 2.0,
+  TANK_HE_FIRE_INTERVAL: 2.5,
   TANK_HE_HIT_CHANCE: 0.7, // lands on the target; a miss scatters TANK_HE_SCATTER px
   TANK_HE_SCATTER: 14,
   TANK_HE_DAMAGE: 55, // to every enemy infantry dot within TANK_HE_SPLASH_R
@@ -88,13 +90,14 @@ export const CONFIG = {
   TANK_HE_SUPPRESS: 0.6,
   TANK_HE_FLIGHT: 0.35,
   TANK_STANDOFF_FRACTION: 0.9, // tanks hold at this × range and never close further
-  TANK_GUN_FIRE_INTERVAL: 2.5,
+  TANK_GUN_FIRE_INTERVAL: 3.0,
   TANK_GUN_HIT_CHANCE: 0.6,
   TANK_GUN_DAMAGE: 150,
   // cover
   COVER_HIT_MULT: 0.6, // incoming hit chance −40%
   COVER_DMG_MULT: 0.7, // damage −30%
   FLANK_ANGLE_DEG: 60, // fire from ≥ this many degrees off the target's facing ignores cover
+  FLANK_SUPPRESS_MULT: 1.6, // fire from the flank/rear suppresses this much harder
   COVER_SEEK_R: 24,
   ENGAGE_STOP_FRACTION: 0.8,
   ENGAGE_MIN_DIST: 40, // a closing dot never voluntarily advances while any enemy is this close
@@ -171,7 +174,7 @@ export const CONFIG = {
   OP_NEAR_MARKER_R: 80,
   OP_TOUCH_R: 30, // enemy dot this close deletes the OP
   OP_SLOW_SPEED: 8, // px/s centroid speed below which a squad counts as stationary
-  WAVE_SECONDS: 20,
+  WAVE_SECONDS: 25,
   MANPOWER_PER_SOLDIER: 5,
   HQ_SPAWN_SPREAD: 30,
   RESPAWN_REJOIN: true, // respawned dots path back to their squad
@@ -292,7 +295,8 @@ export const CONFIG = {
     markerAttack: '#ffffff',
     debugPath: 'rgba(255,255,255,0.5)',
     tracerUs: 'rgba(255,240,160,0.9)',
-    tracerPavn: 'rgba(120,255,140,0.9)',
+    tracerFlank: '#ffb347', // flanking fire
+  tracerPavn: 'rgba(120,255,140,0.9)',
     flash: '#fff6c8',
     impact: '#ffb347',
     suppressed: '#ffd23c',

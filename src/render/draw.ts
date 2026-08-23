@@ -224,7 +224,8 @@ function drawEffects(ctx: CanvasRenderingContext2D, state: GameState, ui: UiStat
     switch (e.kind) {
       case 'tracer':
         ctx.globalAlpha = a;
-        ctx.strokeStyle = e.side === 'US' ? C.tracerUs : C.tracerPavn; ctx.lineWidth = 1;
+        // flanking fire (≥60° off the target's facing — ignores cover) is drawn hot orange, slightly heavier
+        ctx.strokeStyle = e.flank ? C.tracerFlank : e.side === 'US' ? C.tracerUs : C.tracerPavn; ctx.lineWidth = e.flank ? 1.6 : 1;
         ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
         break;
       case 'flash':

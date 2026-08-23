@@ -100,8 +100,8 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
     target.hp -= dmg;
     if (target.hp <= 0) killDot(state, target);
   }
-  // suppression on hit or near miss (vehicles immune)
-  if (!targetVehicle) target.suppression = Math.min(1, target.suppression + CONFIG.SUPPRESS_PER_SHOT);
+  // suppression on hit or near miss (vehicles immune); flank/rear fire rattles harder
+  if (!targetVehicle) target.suppression = Math.min(1, target.suppression + CONFIG.SUPPRESS_PER_SHOT * (flank ? CONFIG.FLANK_SUPPRESS_MULT : 1));
   shooter.firedAt = state.time;
   shooter.fireCooldown = w.interval / (1 - CONFIG.SUPPRESS_FIRE_MULT_MAX * shooter.suppression);
   if (state.squads[shooter.squadId]!.shaken) shooter.fireCooldown /= CONFIG.SHAKEN_FIRE_MULT; // shaken: heads down
@@ -110,7 +110,7 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
   // effects
   const jitter = landed ? 0 : 6;
   const end = v(target.pos.x + (rand(state.rng) - 0.5) * 2 * jitter, target.pos.y + (rand(state.rng) - 0.5) * 2 * jitter);
-  pushEffect(state, { kind: 'tracer', a: v(shooter.pos.x, shooter.pos.y), b: end, side: shooter.side, ttl: CONFIG.TRACER_TTL, max: CONFIG.TRACER_TTL });
+  pushEffect(state, { kind: 'tracer', a: v(shooter.pos.x, shooter.pos.y), b: end, side: shooter.side, ttl: CONFIG.TRACER_TTL, max: CONFIG.TRACER_TTL, flank: flank && !targetVehicle });
   pushEffect(state, { kind: 'flash', pos: v(shooter.pos.x, shooter.pos.y), side: shooter.side, ttl: CONFIG.FLASH_TTL, max: CONFIG.FLASH_TTL });
 }
 
