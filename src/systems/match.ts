@@ -4,6 +4,10 @@ import { type GameState, type Side } from '../state';
 import { ownedGarrisons, squadIsLiving } from './spawning';
 
 export function updateMatch(state: GameState, dt: number): void {
+  if (state.phase === 'draft') {
+    if (state.drafted.US && state.drafted.PAVN) { state.phase = 'setup'; if (CONFIG.SKIP_SETUP) state.setupTimer = 1; }
+    return;
+  }
   if (state.phase === 'setup') {
     state.setupTimer -= dt;
     const bothDone = state.setupDone.US && state.setupDone.PAVN;

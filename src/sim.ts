@@ -10,6 +10,7 @@ import { updateSpawning } from './systems/spawning';
 import { updateCapture } from './systems/capture';
 import { updateEconomy } from './systems/economy';
 import { updateMatch } from './systems/match';
+import { updateAbilities } from './systems/abilities';
 
 export const TICK_DT = 1 / CONFIG.TICK_HZ;
 
@@ -21,6 +22,7 @@ export function stepSim(state: GameState): void {
     updateSquadPaths(state);
     updateMovement(state, TICK_DT);
     updateCombat(state, TICK_DT);
+    updateAbilities(state, TICK_DT);
     updateSpawning(state, TICK_DT);
     updateCapture(state, TICK_DT);
     updateEconomy(state, TICK_DT);

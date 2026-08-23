@@ -3,7 +3,9 @@
 // PvP — nothing may bypass it.
 import { CONFIG } from './config';
 import { isWalkable } from './map/grid';
-import { createGarrison, inOwnTerritory, type Command, type GameState, type MarkerKind, type Side, type VisibleState } from './state';
+import { createGarrison, inOwnTerritory, type AbilityKind, type Command, type GameState, type MarkerKind, type Side, type SquadKind, type VisibleState } from './state';
+import { buyAbility } from './systems/abilities';
+import { applyDraft } from './systems/draft';
 import { dist, type Vec } from './vec';
 
 export interface CommanderInterface {
@@ -12,8 +14,9 @@ export interface CommanderInterface {
   placeGarrison(pos: Vec): void;
   redeployGarrison(garrisonId: number, pos: Vec): void;
   setupDone(): void;
+  draft(comp: Record<SquadKind, number>): void;
+  buyAbility(ability: AbilityKind, pos: Vec, pos2?: Vec, garrisonId?: number): void;
   getVisibleState(): VisibleState;
-  // Phase 4: buyAbility(...)
 }
 
 /** Queues commands onto the state; they are applied at the start of the next tick. */
@@ -25,6 +28,8 @@ export function makeCommander(state: () => GameState, side: Side): CommanderInte
     placeGarrison: (pos) => push({ type: 'placeGarrison', side, pos: { x: pos.x, y: pos.y } }),
     redeployGarrison: (garrisonId, pos) => push({ type: 'redeployGarrison', side, garrisonId, pos: { x: pos.x, y: pos.y } }),
     setupDone: () => push({ type: 'setupDone', side }),
+    draft: (comp) => push({ type: 'draft', side, comp: { ...comp } }),
+    buyAbility: (ability, pos, pos2, garrisonId) => push({ type: 'ability', side, ability, pos: { x: pos.x, y: pos.y }, pos2: pos2 ? { x: pos2.x, y: pos2.y } : undefined, garrisonId }),
     getVisibleState: () => state().vis[side],
   };
 }
@@ -43,13 +48,14 @@ export function garrisonPlacementError(state: GameState, side: Side, pos: Vec, o
     if (owned >= CONFIG.GARRISONS_AT_START) return 'count';
     return null;
   }
-  if (state.res[side].wb < CONFIG.GARRISON_COST_WB) return 'wb';
+  if (state.res[side].wb < CONFIG.ABILITY.garrison!.cost) return 'wb';
+  if (state.cooldowns[side].garrison > 0) return 'cooldown';
   if (CONFIG.GARRISON_REQUIRES_SUPPLY && !hasSupplyNear(state, side, pos)) return 'supply';
   return null;
 }
 
-/** Phase 4 supply drops; until then nothing is supplied. */
-export function hasSupplyNear(_state: GameState, _side: Side, _pos: Vec): boolean {
+export function hasSupplyNear(state: GameState, side: Side, pos: Vec): boolean {
+  for (const s of state.supplies) if (s.side === side && dist(s.pos, pos) <= CONFIG.SUPPLY_RADIUS) return true;
   return false;
 }
 
@@ -64,26 +70,28 @@ export function applyCommands(state: GameState): void {
         break;
       }
       case 'placeGarrison': {
+        // free setup placement; during play this is the 'garrison' ability (cost + cooldown + supply)
+        if (state.phase === 'play') { buyAbility(state, cmd.side, 'garrison', cmd.pos); break; }
         if (garrisonPlacementError(state, cmd.side, cmd.pos)) break;
-        if (state.phase === 'play') state.res[cmd.side].wb -= CONFIG.GARRISON_COST_WB;
         createGarrison(state, cmd.side, cmd.pos);
         break;
       }
       case 'redeployGarrison': {
+        if (state.phase === 'play') { buyAbility(state, cmd.side, 'redeploy', cmd.pos, undefined, cmd.garrisonId); break; }
         const g = state.garrisons[cmd.garrisonId];
         if (!g || g.side !== cmd.side || g.state !== 'active') break;
         if (garrisonPlacementError(state, cmd.side, cmd.pos, { forRedeploy: true })) break;
-        if (state.phase === 'play') {
-          if (state.res[cmd.side].wb < CONFIG.REDEPLOY_COST_WB) break;
-          state.res[cmd.side].wb -= CONFIG.REDEPLOY_COST_WB;
-        }
-        g.state = 'packing';
-        g.packTimer = state.phase === 'setup' ? 0 : CONFIG.REDEPLOY_PACK_SECONDS;
-        g.packTarget = { x: cmd.pos.x, y: cmd.pos.y };
+        g.pos = { x: cmd.pos.x, y: cmd.pos.y }; // instant while still in setup
         break;
       }
       case 'setupDone':
         state.setupDone[cmd.side] = true;
+        break;
+      case 'draft':
+        if (state.phase === 'draft' && !state.drafted[cmd.side]) applyDraft(state, cmd.side, cmd.comp);
+        break;
+      case 'ability':
+        buyAbility(state, cmd.side, cmd.ability, cmd.pos, cmd.pos2, cmd.garrisonId);
         break;
     }
   }

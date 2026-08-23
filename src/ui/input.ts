@@ -2,7 +2,13 @@
 // through the CommanderInterface, pans/zooms the camera. No sim mutation here.
 import { CONFIG } from '../config';
 import { garrisonPlacementError, type CommanderInterface } from '../commander';
-import type { GameState, Garrison, MarkerKind, Side, Squad } from '../state';
+import type { AbilityKind, GameState, Garrison, MarkerKind, Side, Squad } from '../state';
+import { applyDraftHit, defaultDraft, draftHit, type DraftUi } from './draft';
+import { orderCardAt, startAbilityMode } from './orders';
+import { chipAt, focusSquad } from './roster';
+import { abilityError } from '../systems/abilities';
+import { draftError } from '../systems/draft';
+import { ABILITIES } from '../state';
 import { clamp, dist, v, type Vec } from '../vec';
 
 export interface Camera { x: number; y: number; zoom: number }
@@ -23,7 +29,13 @@ export interface UiState {
   controllable: Side[];
   /** Which side the human plays (HUD, fog, placement). */
   player: Side;
-  mode: { kind: 'none' } | { kind: 'placeGarrison' } | { kind: 'redeploy'; garrisonId: number };
+  mode:
+    | { kind: 'none' }
+    | { kind: 'placeGarrison' }
+    | { kind: 'pickGarrison' }
+    | { kind: 'redeploy'; garrisonId: number }
+    | { kind: 'ability'; ability: AbilityKind; stage: 0 | 1; first: Vec | null };
+  draft: DraftUi;
 }
 
 export const MARKER_HIT_R = 14;
@@ -40,6 +52,7 @@ export function createUiState(): UiState {
     controllable: CONFIG.DEBUG_CONTROL_BOTH_SIDES ? ['US', 'PAVN'] : ['US'],
     player: 'US',
     mode: { kind: 'none' },
+    draft: { comp: defaultDraft(), done: false },
   };
 }
 
@@ -96,11 +109,45 @@ export function attachInput(
 
   canvas.addEventListener('mousedown', (e) => {
     const s = screenOf(e);
+    const l = screenToLogical(ui, s);
     const w = screenToWorld(ui, s);
+    const st = state();
+    // ---- UI layer first ----
+    if (st.phase === 'draft') {
+      if (e.button !== 0) return;
+      const hit = draftHit(l);
+      if (hit?.kind === 'deploy') {
+        if (!ui.draft.done && !draftError(ui.draft.comp)) { commanders[ui.player].draft(ui.draft.comp); ui.draft.done = true; }
+      } else applyDraftHit(ui.draft, hit);
+      return;
+    }
+    if (e.button === 0) {
+      const card = orderCardAt(l);
+      if (card) { if (st.phase === 'play') startAbilityMode(ui, card); return; }
+      const chip = chipAt(st, ui, l);
+      if (chip) { focusSquad(st, ui, chip); return; }
+    }
+    if (ui.mode.kind === 'ability') {
+      if (e.button === 2) { ui.mode = { kind: 'none' }; return; }
+      if (e.button !== 0) return;
+      const m = ui.mode;
+      if (m.ability === 'strafe') {
+        if (m.stage === 0) { ui.mode = { kind: 'ability', ability: 'strafe', stage: 1, first: w }; return; }
+        if (!abilityError(st, ui.player, 'strafe', m.first!, w)) { commanders[ui.player].buyAbility('strafe', m.first!, w); ui.mode = { kind: 'none' }; }
+        return;
+      }
+      if (!abilityError(st, ui.player, m.ability, w)) { commanders[ui.player].buyAbility(m.ability, w); ui.mode = { kind: 'none' }; }
+      return;
+    }
+    if (ui.mode.kind === 'pickGarrison') {
+      if (e.button === 2) { ui.mode = { kind: 'none' }; return; }
+      const g = garrisonHit(st, ui, w);
+      if (g) ui.mode = { kind: 'redeploy', garrisonId: g.id };
+      return;
+    }
     if (ui.mode.kind !== 'none') {
       if (e.button === 2) { ui.mode = { kind: 'none' }; return; } // right-click cancels
       if (e.button !== 0) return;
-      const st = state();
       if (ui.mode.kind === 'placeGarrison') {
         if (!garrisonPlacementError(st, ui.player, w)) {
           commanders[ui.player].placeGarrison(w);
@@ -108,7 +155,7 @@ export function attachInput(
           if (st.phase !== 'setup' || owned >= CONFIG.GARRISONS_AT_START) ui.mode = { kind: 'none' };
         }
       } else if (ui.mode.kind === 'redeploy') {
-        if (!garrisonPlacementError(st, ui.player, w, { forRedeploy: true })) {
+        if (!garrisonPlacementError(st, ui.player, w, { forRedeploy: true }) && (st.phase !== 'play' || !abilityError(st, ui.player, 'redeploy', w, undefined, ui.mode.garrisonId))) {
           commanders[ui.player].redeployGarrison(ui.mode.garrisonId, w);
           ui.mode = { kind: 'none' };
         }
@@ -144,9 +191,11 @@ export function attachInput(
     } else if (ui.drag?.kind === 'marker') {
       ui.drag.pos = v(clamp(w.x, 0, CONFIG.LOGICAL_W), clamp(w.y, 0, CONFIG.LOGICAL_H));
     } else {
-      const hit = markerHit(state(), ui, w);
+      const l = screenToLogical(ui, s);
+      const chip = chipAt(state(), ui, l);
+      const hit = chip ?? markerHit(state(), ui, w);
       ui.hoverSquadId = hit ? hit.id : null;
-      canvas.style.cursor = hit ? 'grab' : 'default';
+      canvas.style.cursor = chip ? 'pointer' : hit ? 'grab' : ui.mode.kind !== 'none' ? 'crosshair' : 'default';
     }
   });
 
@@ -178,6 +227,8 @@ export function attachInput(
     if (e.key === 'f' || e.key === 'F') ui.revealAll = !ui.revealAll;
     if (e.key === 'g' || e.key === 'G') ui.mode = ui.mode.kind === 'placeGarrison' ? { kind: 'none' } : { kind: 'placeGarrison' };
     if (e.key === 'Escape') ui.mode = { kind: 'none' };
+    const n = Number(e.key);
+    if (n >= 1 && n <= ABILITIES.length && state().phase === 'play') startAbilityMode(ui, ABILITIES[n - 1]!);
     if (e.key === 'Enter' && state().phase === 'setup') commanders[ui.player].setupDone();
   });
 }

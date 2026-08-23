@@ -131,7 +131,15 @@ function updateWaves(state: GameState, dt: number): void {
       if (sq.side !== side || sq.kind === 'artillery') continue;
       const dead = sq.dotIds.map((id) => state.dots[id]!).filter((d) => !d.alive);
       if (!dead.length) continue;
-      if (sq.kind === 'tank') continue; // tank respawn is a Fuel purchase (Phase 4)
+      if (sq.kind === 'tank') {
+        // one Fuel-funded respawn per tank slot per match, at the HQ
+        if (state.tankRespawnUsed[sq.id] || res.fuel < CONFIG.TANK_RESPAWN_FUEL) continue;
+        res.fuel -= CONFIG.TANK_RESPAWN_FUEL;
+        state.tankRespawnUsed[sq.id] = true;
+        for (const d of dead) respawnDot(state, sq, d, hqCenter(state, side), null);
+        sq.pathGoal = null;
+        continue;
+      }
       const alive = aliveDots(state, sq);
       const sp = spawnPointFor(state, sq);
       if (sp.kind === 'hq' && !hqSpawnAllowed(state, side)) continue;

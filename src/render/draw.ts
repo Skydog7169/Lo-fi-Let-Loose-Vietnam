@@ -2,10 +2,11 @@
 // The static map layer is rendered once to an offscreen canvas at 2× and blitted.
 import { CONFIG } from '../config';
 import type { MapData, Shape } from '../map/an_cuong';
-import { sectorLineX, type Dot, type GameState, type Garrison, type Side, type Squad } from '../state';
+import { inOwnTerritory, sectorLineX, type Dot, type GameState, type Garrison, type Side, type Squad } from '../state';
+import { isCoverAt } from '../map/grid';
 import { garrisonPlacementError } from '../commander';
 import type { UiState } from '../ui/input';
-import { fromAngle, type Vec } from '../vec';
+import { dist, fromAngle, v, type Vec } from '../vec';
 
 const C = CONFIG.COLORS;
 const STATIC_SCALE = 2;
@@ -405,13 +406,96 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
   for (const sq of state.squads) drawSquad(ctx, state, sq, ui);
   drawEffects(ctx, state, ui);
 
+  // ---- ability effects ----
+  for (const r of state.recons) {
+    if (r.side !== me && !ui.revealAll) continue;
+    ctx.fillStyle = C.recon; ctx.beginPath(); ctx.arc(r.pos.x, r.pos.y, r.r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,200,255,0.7)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]);
+    // sweep hand
+    const a = state.time * 2;
+    ctx.beginPath(); ctx.moveTo(r.pos.x, r.pos.y); ctx.lineTo(r.pos.x + Math.cos(a) * r.r, r.pos.y + Math.sin(a) * r.r); ctx.strokeStyle = 'rgba(120,200,255,0.5)'; ctx.stroke();
+    ctx.fillStyle = '#bfe6ff'; ctx.font = '9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(`RECON ${Math.ceil(r.t)}s`, r.pos.x, r.pos.y - r.r - 3);
+  }
+  for (const sp of state.supplies) {
+    if (sp.side !== me && !ui.revealAll && !(inOwnTerritory(state, me, sp.pos) && !isCoverAt(state.grid, sp.pos))) continue;
+    ctx.save(); ctx.translate(sp.pos.x, sp.pos.y);
+    ctx.fillStyle = C.supply; ctx.fillRect(-5, -5, 10, 10); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(-5, -5, 10, 10);
+    ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(5, 5); ctx.moveTo(5, -5); ctx.lineTo(-5, 5); ctx.stroke();
+    ctx.restore();
+    if (sp.side === me) {
+      ctx.strokeStyle = 'rgba(217,179,107,0.5)'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(sp.pos.x, sp.pos.y, CONFIG.SUPPLY_RADIUS, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = C.supply; ctx.font = '8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(`${Math.ceil(sp.t)}s`, sp.pos.x, sp.pos.y + 7);
+    }
+  }
+  for (const st of state.strafes) {
+    ctx.strokeStyle = C.strafe; ctx.lineWidth = st.delay > 0 ? 1 : 2; ctx.setLineDash(st.delay > 0 ? [6, 4] : []);
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath(); ctx.moveTo(st.a.x, st.a.y); ctx.lineTo(st.b.x, st.b.y); ctx.stroke(); ctx.setLineDash([]);
+    if (st.delay <= 0) {
+      // the aircraft: a small chevron sweeping along the line
+      const px = st.a.x + (st.b.x - st.a.x) * st.progress, py = st.a.y + (st.b.y - st.a.y) * st.progress;
+      const ang = Math.atan2(st.b.y - st.a.y, st.b.x - st.a.x);
+      ctx.save(); ctx.translate(px, py); ctx.rotate(ang);
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-6, 5); ctx.lineTo(-3, 0); ctx.lineTo(-6, -5); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.fillStyle = C.strafe; ctx.font = '9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText(`STRAFE ${st.delay.toFixed(1)}`, (st.a.x + st.b.x) / 2, (st.a.y + st.b.y) / 2 - 6);
+    }
+    ctx.globalAlpha = 1;
+  }
+  for (const b of state.barrages) {
+    ctx.strokeStyle = C.impact; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, b.r, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = C.impact; ctx.font = '9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(b.delay > 0 ? `BARRAGE ${b.delay.toFixed(1)}` : `${b.shellsLeft} shells`, b.pos.x, b.pos.y - b.r - 3);
+  }
+
+  // ---- targeting previews ----
+  if (ui.mode.kind === 'ability' && ui.mouseWorld) {
+    const p = ui.mouseWorld;
+    const m = ui.mode;
+    ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    if (m.ability === 'recon' || m.ability === 'barrage') {
+      const r = m.ability === 'recon' ? CONFIG.RECON_RADIUS : CONFIG.BARRAGE_RADIUS;
+      ctx.strokeStyle = m.ability === 'recon' ? '#bfe6ff' : C.impact;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
+    } else if (m.ability === 'strafe') {
+      ctx.strokeStyle = C.strafe;
+      if (m.stage === 0) { ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.stroke(); }
+      else {
+        const a = m.first!; let b = p; const L = dist(a, b);
+        if (L > CONFIG.STRAFE_MAX_LENGTH) b = v(a.x + ((b.x - a.x) * CONFIG.STRAFE_MAX_LENGTH) / L, a.y + ((b.y - a.y) * CONFIG.STRAFE_MAX_LENGTH) / L);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        // beaten zone
+        const ang = Math.atan2(b.y - a.y, b.x - a.x), nx = -Math.sin(ang) * CONFIG.STRAFE_WIDTH, ny = Math.cos(ang) * CONFIG.STRAFE_WIDTH;
+        ctx.globalAlpha = 0.25; ctx.fillStyle = C.strafe;
+        ctx.beginPath(); ctx.moveTo(a.x + nx, a.y + ny); ctx.lineTo(b.x + nx, b.y + ny); ctx.lineTo(b.x - nx, b.y - ny); ctx.lineTo(a.x - nx, a.y - ny); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+      }
+    } else if (m.ability === 'supply') {
+      ctx.strokeStyle = C.supply;
+      ctx.beginPath(); ctx.arc(p.x, p.y, CONFIG.SUPPLY_RADIUS, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = C.supply; ctx.fillRect(p.x - 5, p.y - 5, 10, 10);
+    }
+    ctx.setLineDash([]);
+  }
+  if (ui.mode.kind === 'pickGarrison') {
+    for (const g of state.garrisons) {
+      if (g.side !== me || g.state !== 'active') continue;
+      const pulse = 0.5 + 0.5 * Math.sin(state.time * 6);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.4 + 0.6 * pulse;
+      ctx.beginPath(); ctx.arc(g.pos.x, g.pos.y, 14 / Math.sqrt(cam.zoom), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+  }
+
   // placement preview
-  if (ui.mode.kind !== 'none' && ui.mouseWorld) {
+  if ((ui.mode.kind === 'placeGarrison' || ui.mode.kind === 'redeploy') && ui.mouseWorld) {
     const p = ui.mouseWorld;
     const err = garrisonPlacementError(state, me, p, { forRedeploy: ui.mode.kind === 'redeploy' });
     const ok = !err;
     ctx.globalAlpha = 0.85;
-    drawGarrison(ctx, { id: -1, side: me, pos: p, state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null }, state.time, cam.zoom);
+    drawGarrison(ctx, { id: -1, side: me, pos: p, hp: CONFIG.GARRISON_HP, state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null }, state.time, cam.zoom);
     ctx.globalAlpha = 1;
     ctx.strokeStyle = ok ? '#8f8' : '#f66'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.arc(p.x, p.y, CONFIG.GARRISON_DISABLE_R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);

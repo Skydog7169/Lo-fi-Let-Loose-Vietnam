@@ -158,3 +158,70 @@ export function runPhase3Checks(seed = 1): Check[] {
   }
   return out;
 }
+
+// ---- AI vs AI matches (Phase 4) ----
+import { makeCommander } from './commander';
+import { makeCommanderAi } from './systems/commander_ai';
+
+export interface MatchResult {
+  seed: number; seconds: number; result: { winner: string; reason: string } | null; phase: string;
+  points: string; stats: GameState['stats']; garrisons: Record<string, number>; abilitiesBought: Record<string, number>;
+  casualtyTimeline: number[][];
+}
+
+export let lastMatchState: GameState | null = null;
+export function runAiMatch(seed: number, maxSeconds = 20 * 60, opts: { passiveUs?: boolean; onTick?: (st: GameState) => void } = {}): MatchResult {
+  const st = createInitialState(seed, 'default');
+  const cmds = { US: makeCommander(() => st, 'US'), PAVN: makeCommander(() => st, 'PAVN') };
+  const ais = [makeCommanderAi('PAVN', cmds.PAVN, st.map, st.grid, seed)];
+  if (!opts.passiveUs) ais.push(makeCommanderAi('US', cmds.US, st.map, st.grid, seed));
+  let usSetup = false;
+  const bought: Record<string, number> = {};
+  const tl: number[][] = [];
+  const ticks = Math.round(maxSeconds * 60);
+  for (let k = 0; k < ticks; k++) {
+    for (const a of ais) a.update(st.time);
+    if (opts.passiveUs) {
+      // a human who drafts, places garrisons and then does nothing
+      if (st.phase === 'draft' && !st.drafted.US) cmds.US.draft({ infantry: 4, at: 1, recon: 0, tank: 1, artillery: 0 });
+      if (st.phase === 'setup' && !usSetup) { cmds.US.placeGarrison({ x: 60, y: 300 }); cmds.US.placeGarrison({ x: 60, y: 520 }); cmds.US.placeGarrison({ x: 130, y: 300 }); cmds.US.setupDone(); usSetup = true; }
+    }
+    opts.onTick?.(st);
+    for (const c of st.pendingCommands) if (c.type === 'ability') bought[`${c.side}:${c.ability}`] = (bought[`${c.side}:${c.ability}`] ?? 0) + 1;
+    stepSim(st);
+    if (k % 3600 === 0) tl.push([Math.round(k / 60), st.stats.US.casualties, st.stats.PAVN.casualties, st.active, Math.round(st.timer)]);
+    if (st.phase === 'ended') break;
+  }
+  const gar: Record<string, number> = {};
+  for (const g of st.garrisons) gar[`${g.side}:${g.state}`] = (gar[`${g.side}:${g.state}`] ?? 0) + 1;
+  lastMatchState = st;
+  return {
+    seed, seconds: Math.round(st.time), result: st.result, phase: st.phase,
+    points: st.points.map((p) => p.owner[0]).join(''), stats: st.stats, garrisons: gar, abilitiesBought: bought, casualtyTimeline: tl,
+  };
+}
+
+/** Phase 4 check: does the PAVN AI infiltrate the wooded corridor and hit an undefended US flank/rear? */
+export function checkInfiltration(seed = 1): { pass: boolean; detail: string } {
+  let corridorDeepest = Infinity; // smallest x reached by a PAVN dot while inside the north woods (y < 170)
+  let usGarrisonHit = false;
+  let enteredUsTerritoryViaWoods = false;
+  runAiMatch(seed, 10 * 60, {
+    passiveUs: true,
+    onTick: (st) => {
+      if (st.phase !== 'play') return;
+      const sx = sectorLineX(st);
+      for (const d of st.dots) {
+        if (!d.alive || d.side !== 'PAVN') continue;
+        if (d.pos.y < 170 && d.pos.x < corridorDeepest) corridorDeepest = d.pos.x;
+        if (d.pos.y < 170 && d.pos.x < sx) enteredUsTerritoryViaWoods = true;
+      }
+      for (const g of st.garrisons) if (g.side === 'US' && (g.disabled || g.state === 'destroyed')) usGarrisonHit = true;
+    },
+  });
+  // "infiltrates the corridor": PAVN dots travelled the north woods at least as far west as x=400 (the corridor's
+  // western half, past the ford) and a US garrison behind the front was disabled or destroyed.
+  const usedCorridor = corridorDeepest < 400;
+  const pass = usedCorridor && usGarrisonHit;
+  return { pass, detail: `deepest corridor x=${corridorDeepest === Infinity ? '—' : corridorDeepest.toFixed(0)}, crossed into US territory inside the woods=${enteredUsTerritoryViaWoods}, US garrison disabled/destroyed=${usGarrisonHit}` };
+}

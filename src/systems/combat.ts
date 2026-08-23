@@ -96,6 +96,13 @@ export function shellImpact(state: GameState, p: Vec): void {
     if (d2 <= sr2) { d.hp -= CONFIG.ARTY_SHELL_DAMAGE; if (d.hp <= 0) killDot(state, d); }
     if (d.alive && d2 <= ur2 && !isVehicle(state.squads[d.squadId]!.kind)) d.suppression = Math.min(1, d.suppression + CONFIG.ARTY_SUPPRESS);
   }
+  // spawns: OPs are deleted by a near hit, garrisons lose hp and die after a few
+  for (const sq of state.squads) if (sq.op && dist2(sq.op, p) <= sr2) sq.op = null;
+  for (const g of state.garrisons) {
+    if (g.state === 'destroyed' || dist2(g.pos, p) > sr2) continue;
+    g.hp -= CONFIG.SHELL_SPAWN_DAMAGE;
+    if (g.hp <= 0) { g.state = 'destroyed'; g.disabled = false; state.stats[g.side].garrisonsLost++; }
+  }
   pushEffect(state, { kind: 'impact', pos: v(p.x, p.y), r: CONFIG.ARTY_SPLASH_R, ttl: CONFIG.IMPACT_TTL, max: CONFIG.IMPACT_TTL });
 }
 

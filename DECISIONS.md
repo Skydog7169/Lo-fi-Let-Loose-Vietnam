@@ -38,3 +38,14 @@ Ambiguities resolved while building. Each is the simplest reading of the bible, 
 - **Economy starts** with `START_*` pools (WB 200 until the Phase 4 draft replaces it with the unspent budget); income accrues per tick.
 - Scenarios can turn off `rules.income` / `rules.respawn` so pure combat tests are not polluted by reinforcements; `npm run headless -- checks` runs the Phase 3 check suite.
 - `DEBUG_CONTROL_BOTH_SIDES` is now off (enemy markers would leak through fog).
+
+## Phase 4
+
+- **Match phases:** `draft → setup → play → ended`. The draft screen is canvas-drawn; the AI drafts `AI_DRAFT` (3 inf, AT, recon, tank = 825 WB, 175 carried). `?setup=0` shortens setup to 1 s and auto-places the human's garrisons so the AI still gets its placement pass.
+- **Abilities** go through `buyAbility` (cost from the right pool, per-ability cooldown). Recon/barrage can be fired blind anywhere; strafing is a two-click line capped at `STRAFE_MAX_LENGTH`; supply drops last `SUPPLY_LIFETIME` and are consumed by the garrison they enable; new garrisons during play are the `garrison` ability (setup placement stays free). Redeploy packs 30 s then re-appears.
+- **Shells vs spawns:** any shell (battery or barrage) landing within splash of an OP deletes it; garrisons have `GARRISON_HP` and die to two hits — "can hit spawns".
+- **Tank respawn:** one Fuel-funded (`TANK_RESPAWN_FUEL`) respawn per tank slot per match, at the HQ, at the next wave.
+- **AI** (`commander_ai.ts`) runs either side, only through `CommanderInterface` + its `VisibleState` (which now carries `own` assets and `pub` match facts — both legitimately known to a commander). It keeps private memory (infiltration waypoint plan, chosen garrison spot, last-contact time). Priority list per bible §10.2; squads beyond the two point-holders flank the point; tanks push/hold; the battery shells the largest visible cluster. `AI_DIFFICULTY` (easy/normal/hard → cadence + bonus WB; `?ai=`) is the one knob — no map hacks.
+- **Infiltration plan:** a fixed corridor route along y≈85 (PAVN: 900→700→ford→380, US mirrored) ending `140px` behind the enemy side of the sector line; at the end it attacks any visible enemy garrison/OP in the rear, else holds in the trees. Verified headlessly against a passive human (`npm run headless -- infiltrate`): 6/6 seeds run the corridor and disable/destroy a US rear garrison.
+- **AI-vs-AI** (`npm run headless -- aimatch`) is the full-match smoke test; both capture and time-out endings occur across seeds; annihilation is covered by the `win_annihilate` scenario and the playable `endgame` scenario.
+- **Roster chips** replace the debug squad strip; clicking a chip centres the camera. The end screen shows point-minutes, casualties and garrisons lost.

@@ -1,6 +1,6 @@
 // Headless verification runner: `npm run headless -- <scenario|all> [seeds] [seconds]`
 // Bundled with esbuild and run in Node — no DOM, deterministic.
-import { profilePaths, runMany, runPhase3Checks, runScenario } from '../src/devtools';
+import { checkInfiltration, profilePaths, runAiMatch, runMany, runPhase3Checks, runScenario } from '../src/devtools';
 import { SCENARIOS } from '../src/scenarios';
 
 const [, , what = 'all', seedsArg = '20', secsArg = '150'] = process.argv;
@@ -32,6 +32,13 @@ if (what === 'perf') {
   const r = runScenario('stress', 1, 60, 999);
   const ms = performance.now() - a;
   console.log(`stress: 60s sim in ${ms.toFixed(0)}ms → ${(ms / 3600).toFixed(3)} ms/tick, alive ${r.alive.reduce((s, x) => s + x.alive, 0)}`);
+} else if (what === 'aimatch') {
+  for (const seed of seeds.slice(0, nSeeds)) {
+    const r = runAiMatch(seed, secs);
+    console.log(`seed ${seed}: ${r.phase} ${JSON.stringify(r.result)} at ${r.seconds}s  points ${r.points}  cas US ${r.stats.US.casualties} PAVN ${r.stats.PAVN.casualties}  garrisons ${JSON.stringify(r.garrisons)}  bought ${JSON.stringify(r.abilitiesBought)}`);
+  }
+} else if (what === 'infiltrate') {
+  for (const seed of seeds.slice(0, nSeeds)) { const r = checkInfiltration(seed); console.log(`${r.pass ? 'PASS' : 'FAIL'} seed ${seed}: ${r.detail}`); }
 } else if (what === 'checks') {
   const res = runPhase3Checks(Number(seedsArg) || 1);
   for (const c of res) console.log(`${c.pass ? 'PASS' : 'FAIL'}  ${c.name.padEnd(48)} ${c.detail}`);

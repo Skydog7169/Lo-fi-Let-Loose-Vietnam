@@ -5,7 +5,7 @@
 // reads visibility only from here.
 import { CONFIG } from '../config';
 import { isCoverAt } from '../map/grid';
-import { inOwnTerritory, isVehicle, type Dot, type GameState, type Side } from '../state';
+import { inOwnTerritory, isVehicle, sectorLineX, type Dot, type GameState, type Side } from '../state';
 import { dist2, v, type Vec } from '../vec';
 
 function visionRadius(state: GameState, d: Dot): number {
@@ -20,6 +20,7 @@ function visionRadius(state: GameState, d: Dot): number {
 function seenBy(state: GameState, side: Side, p: Vec, inCover: boolean, ownDots: Dot[], radii: Float32Array): boolean {
   if (CONFIG.DEBUG_REVEAL_ALL) return true;
   if (!inCover && inOwnTerritory(state, side, p)) return true;
+  for (const r of state.recons) if (r.side === side && dist2(r.pos, p) <= r.r * r.r) return true; // recon flight sees through cover
   for (let i = 0; i < ownDots.length; i++) {
     let r = radii[i]!;
     if (inCover) r *= CONFIG.VISION_COVER_MULT;
@@ -76,6 +77,14 @@ export function updateVision(state: GameState, dt: number): void {
     vs.dotVisible = dotVisible;
     vs.garrisonVisible = garrisonVisible;
     vs.opVisible = opVisible;
+    vs.own = {
+      squads: state.squads.filter((s) => s.side === side),
+      garrisons: state.garrisons.filter((g) => g.side === side && g.state !== 'destroyed'),
+      res: state.res[side],
+      cooldowns: state.cooldowns[side],
+      supplies: state.supplies.filter((s) => s.side === side),
+    };
+    vs.pub = { points: state.points, active: state.active, sectorX: sectorLineX(state), timer: state.timer, phase: state.phase };
   }
 }
 

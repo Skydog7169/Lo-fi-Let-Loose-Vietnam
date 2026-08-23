@@ -1,0 +1,9 @@
+# TUNING — first playtest notes
+
+Every number is in `src/config.ts`. Things the headless suite already tells us (`npm run headless -- aimatch 8 1500`):
+
+- **Attacker bleeds at the river.** AI-vs-AI, the US usually takes point 1 and then stalls at An Cuong (point 2) with ~340 casualties to ~140. Bible §13's first question ("does a lost early garrison snowball?") is less of an issue than the bridge chokepoint + village cover. Candidate knobs: `MAN_BASE`/`MAN_PER_POINT` (attacker reinforcement), `CAPTURE_SECONDS_PER_DOT`, village cover (`COVER_*`), or giving the attacker a bigger draft budget.
+- **Firefights** in the open last ~38 s (6v6), woods defender vs open attacker ~55 s and decisive, flank+pin ~26 s. If they feel too fast, lower `INF_HIT_CHANCE` (0.12) or raise `SUPPRESS_PER_SHOT`; if stalemates drag, lower `SUPPRESS_DECAY_S` or cheapen `ABILITY.barrage`.
+- **Artillery battery** (30 shells) wipes a stationary village squad by itself in ~35 s — probably too strong; consider `ARTY_SHELL_DAMAGE` 60→40 or fewer shells.
+- **Economy:** base Manpower 50/min is 10 soldiers/min; the defender holding 5 points gets 175/min. Expect the first real playtest to want `MAN_BASE` up or `MANPOWER_PER_SOLDIER` down for the attacker.
+- **Garrison loss** is permanent and the AI will find an undefended rear garrison via the north corridor within ~90 s. If that feels unfair, raise `GARRISON_DESTROY_SECONDS` or lower `VISION_RECON`.

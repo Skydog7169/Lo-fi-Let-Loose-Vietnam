@@ -167,6 +167,57 @@ export const CONFIG = {
   START_MAN: 300,
   START_FUEL: 150,
 
+  // ---- Draft (bible §3.2) ----
+  DRAFT_BUDGET_WB: 1000,
+  UNIT_COST: { infantry: 100, at: 150, recon: 125, tank: 250, artillery: 200 } as Record<string, number>,
+  SQUAD_SLOTS: 6, // infantry + at + recon together
+  TANK_CAP: 2,
+  ARTILLERY_CAP: 1,
+  AI_DRAFT: { infantry: 3, at: 1, recon: 1, tank: 1, artillery: 0 } as Record<string, number>, // 3×100+150+125+250 = 825 → 175 WB carried
+  TANK_RESPAWN_FUEL: 300, // one respawn per tank slot per match
+
+  // ---- Commander abilities (bible §8) ----
+  ABILITY: {
+    recon: { cost: 150, pool: 'mun', cooldown: 120 },
+    strafe: { cost: 300, pool: 'mun', cooldown: 240 },
+    barrage: { cost: 250, pool: 'mun', cooldown: 180 },
+    supply: { cost: 100, pool: 'fuel', cooldown: 90 },
+    garrison: { cost: 300, pool: 'wb', cooldown: 120 },
+    redeploy: { cost: 75, pool: 'wb', cooldown: 60 },
+  } as Record<string, { cost: number; pool: 'wb' | 'mun' | 'man' | 'fuel'; cooldown: number }>,
+  RECON_RADIUS: 200,
+  RECON_DURATION: 30,
+  STRAFE_MAX_LENGTH: 320,
+  STRAFE_WIDTH: 22, // half-width of the beaten zone
+  STRAFE_DURATION: 1.6, // seconds the run sweeps along the line
+  STRAFE_DAMAGE: 80, // infantry in the open; halved by cover
+  STRAFE_TANK_DAMAGE: 60,
+  STRAFE_SUPPRESS: 0.8,
+  STRAFE_DELAY: 2.0, // seconds from order to first rounds (the plane has to arrive)
+  BARRAGE_RADIUS: 50,
+  BARRAGE_SHELLS: 12,
+  BARRAGE_DURATION: 10,
+  BARRAGE_DELAY: 3.0,
+  SUPPLY_LIFETIME: 120, // seconds a drop stays usable
+  GARRISON_HP: 100, // shells: a garrison dies to a few direct hits
+  SHELL_SPAWN_DAMAGE: 60,
+
+  // ---- Commander AI (bible §10.2) ----
+  AI_DIFFICULTY: 'normal' as 'easy' | 'normal' | 'hard', // the one knob; ?ai=easy|normal|hard overrides
+  AI_DIFFICULTY_PRESETS: {
+    easy: { cadence: 9, bonusWb: 0 },
+    normal: { cadence: 5, bonusWb: 0 },
+    hard: { cadence: 3, bonusWb: 300 },
+  } as Record<string, { cadence: number; bonusWb: number }>,
+  AI_CADENCE: 5, // seconds between evaluations (set from the preset at boot)
+  AI_BONUS_WB: 0, // extra draft/starting WB for the AI (set from the preset at boot)
+  AI_CONTACT_LOST_SECONDS: 25, // no visible enemy this long → buy recon
+  AI_CLUSTER_R: 45, // radius for "largest visible enemy cluster"
+  AI_CLUSTER_MIN: 4, // dots needed to justify a strike
+  AI_REAR_GARRISON_DIST: 320, // a garrison this far behind the sector line gets redeployed forward
+  AI_FORWARD_GARRISON_DIST: 160, // ...to about this far behind the line
+  AI_POINT_SQUADS: 2, // squads kept on the active point
+
   // ---- Vision & fog (bible §5) ----
   VISION_INTERVAL_TICKS: 3,
   VISION_INF: 120,
@@ -220,6 +271,13 @@ export const CONFIG = {
     hudBg: 'rgba(10,12,14,0.82)',
     hudText: '#e8e4d8',
     hudDim: '#9a968c',
+    cardBg: 'rgba(20,24,28,0.92)',
+    cardEdge: '#4a5058',
+    cardReady: '#8fd18f',
+    cardCool: '#555c66',
+    supply: '#d9b36b',
+    recon: 'rgba(120,200,255,0.18)',
+    strafe: '#ffb347',
     letterbox: '#0b0d0f',
   },
 } as const;

@@ -3,6 +3,7 @@
 import { CONFIG } from './config';
 import { createEmptyState, createGarrison, createSquad, type GameState, type MarkerKind, type Side, type SquadKind } from './state';
 import { v, type Vec } from './vec';
+import { applyDraft } from './systems/draft';
 
 /** Pure combat test: no setup phase, no reinforcements, no garrisons. */
 function combatOnly(s: GameState): void {
@@ -20,28 +21,33 @@ function place(state: GameState, side: Side, kind: SquadKind, label: string, pos
 }
 
 export const SCENARIOS: Record<string, (s: GameState) => void> = {
-  /** The match: US attacks from the west HQ; PAVN defends with squads on/near point 1 and three garrisons.
-   *  US garrisons are placed by the player during setup (auto-placed when setup is skipped). */
-  default(s) {
-    const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
-    const hq = s.map.hqs.find((h) => h.side === 'US')!.rect;
-    for (let i = 0; i < CONFIG.PLACEHOLDER_SQUADS_PER_SIDE; i++) {
-      const y = hq.y + ((i + 1) * hq.h) / (CONFIG.PLACEHOLDER_SQUADS_PER_SIDE + 1);
-      place(s, 'US', 'infantry', labels[i]!, v(hq.x + hq.w / 2, y));
-    }
-    place(s, 'PAVN', 'infantry', 'A', v(330, 470), { kind: 'defend', pos: v(250, 430) });
-    place(s, 'PAVN', 'infantry', 'B', v(340, 300), { kind: 'defend', pos: v(330, 280) });
-    place(s, 'PAVN', 'infantry', 'C', v(460, 330), { kind: 'defend', pos: v(440, 330) });
+  /** The match. Both sides draft (human via the draft screen, the scripted AI automatically),
+   *  place garrisons in setup, then play. Nothing is pre-placed. */
+  default(_s) {},
+  /** Match with both sides auto-drafted (AI template) and garrisons pre-placed; setup skipped. For headless tests. */
+  match(s) {
+    applyDraft(s, 'US', { ...CONFIG.AI_DRAFT } as Record<SquadKind, number>);
+    applyDraft(s, 'PAVN', { ...CONFIG.AI_DRAFT } as Record<SquadKind, number>);
+    autoPlaceUsGarrisons(s);
     garrison(s, 'PAVN', 360, 430);
     garrison(s, 'PAVN', 500, 250);
     garrison(s, 'PAVN', 700, 560);
-    if (CONFIG.SKIP_SETUP) autoPlaceUsGarrisons(s);
-  },
-  /** Match with both sides' garrisons pre-placed and setup skipped. */
-  match(s) {
-    SCENARIOS['default']!(s);
-    autoPlaceUsGarrisons(s);
     s.phase = 'play';
+  },
+  /** Playable endgame: hunt the last garrison. US has two squads and one garrison; PAVN has one squad
+   *  and one garrison hidden in the south-east woods, no income. Find it and kill it before the clock runs out. */
+  endgame(s) {
+    s.phase = 'play';
+    s.timer = 5 * 60;
+    s.active = 4; // point 5 contested; 1–4 already US
+    for (let i = 0; i < 4; i++) { s.points[i]!.owner = 'US'; s.points[i]!.progress = 1; }
+    s.rules.income = true;
+    s.res.PAVN.man = 60;
+    garrison(s, 'US', 640, 420);
+    garrison(s, 'PAVN', 1010, 690);
+    place(s, 'US', 'infantry', 'A', v(700, 450), { kind: 'attack', pos: v(1030, 430) });
+    place(s, 'US', 'recon', 'B', v(700, 480), { kind: 'attack', pos: v(900, 600) });
+    place(s, 'PAVN', 'infantry', 'A', v(1000, 660), { kind: 'defend', pos: v(1000, 660) });
   },
   // ---- Phase 3 verification scenes ----
   /** A PAVN OP sits in the open near point 1; a US squad is ordered onto it. PAVN squad has no garrison → HQ fallback. */

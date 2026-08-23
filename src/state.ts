@@ -68,6 +68,7 @@ export interface Garrison {
   id: number;
   side: Side;
   pos: Vec;
+  hp: number;
   state: GarrisonState;
   disabled: boolean; // enemy within GARRISON_DISABLE_R
   threatTimer: number; // seconds of continuous enemy presence
@@ -79,13 +80,22 @@ export interface Resources { wb: number; mun: number; man: number; fuel: number 
 
 export interface PointState { id: number; owner: Side; progress: number } // progress = attacker (US) capture 0..1
 
-export type MatchPhase = 'setup' | 'play' | 'ended';
+export type MatchPhase = 'draft' | 'setup' | 'play' | 'ended';
+export type AbilityKind = 'recon' | 'strafe' | 'barrage' | 'supply' | 'garrison' | 'redeploy';
+export const ABILITIES: AbilityKind[] = ['recon', 'strafe', 'barrage', 'supply', 'garrison', 'redeploy'];
+export interface Recon { side: Side; pos: Vec; r: number; t: number }
+export interface Supply { side: Side; pos: Vec; t: number }
+export interface Strafe { side: Side; a: Vec; b: Vec; delay: number; t: number; progress: number } // t = remaining sweep
+export interface Barrage { side: Side; pos: Vec; r: number; delay: number; t: number; shellsLeft: number; nextShell: number }
 
 export interface Ghost { pos: Vec; side: Side; t: number; kind: 'dot' | 'tank' }
 
 /** What one commander is allowed to know. Both the human UI and the scripted AI read only this. */
 export interface VisibleState {
   side: Side;
+  /** Own assets and public match facts — everything a commander legitimately knows. */
+  own: { squads: Squad[]; garrisons: Garrison[]; res: Resources; cooldowns: Record<AbilityKind, number>; supplies: Supply[] };
+  pub: { points: PointState[]; active: number; sectorX: number; timer: number; phase: MatchPhase };
   enemyDots: Dot[]; // visible enemy dots (live references; do not mutate)
   enemyGarrisons: Garrison[];
   enemyOps: { squadId: number; pos: Vec }[];
@@ -100,7 +110,9 @@ export type Command =
   | { type: 'marker'; side: Side; squadId: number; kind: MarkerKind; pos: Vec }
   | { type: 'placeGarrison'; side: Side; pos: Vec }
   | { type: 'redeployGarrison'; side: Side; garrisonId: number; pos: Vec }
-  | { type: 'setupDone'; side: Side };
+  | { type: 'setupDone'; side: Side }
+  | { type: 'draft'; side: Side; comp: Record<SquadKind, number> }
+  | { type: 'ability'; side: Side; ability: AbilityKind; pos: Vec; pos2?: Vec; garrisonId?: number };
 
 export interface GameState {
   seed: number;
@@ -129,6 +141,13 @@ export interface GameState {
   vis: Record<Side, VisibleState>;
   stats: Record<Side, { casualties: number; garrisonsLost: number; pointHeldTime: number }>;
   rules: { income: boolean; respawn: boolean }; // scenario overrides for pure combat tests
+  drafted: Record<Side, boolean>;
+  cooldowns: Record<Side, Record<AbilityKind, number>>; // seconds remaining
+  recons: Recon[];
+  supplies: Supply[];
+  strafes: Strafe[];
+  barrages: Barrage[];
+  tankRespawnUsed: Record<number, boolean>; // by squad id
 }
 
 let nextSquadId = 0;
@@ -210,7 +229,7 @@ export function createEmptyState(seed: number, scenario: string): GameState {
     effects: [],
     shells: [],
     scenario,
-    phase: 'setup',
+    phase: 'draft',
     setupTimer: CONFIG.SETUP_SECONDS,
     setupDone: { US: false, PAVN: false },
     timer: CONFIG.MATCH_SECONDS,
@@ -226,16 +245,25 @@ export function createEmptyState(seed: number, scenario: string): GameState {
     vis: { US: emptyVisible('US'), PAVN: emptyVisible('PAVN') },
     stats: { US: { casualties: 0, garrisonsLost: 0, pointHeldTime: 0 }, PAVN: { casualties: 0, garrisonsLost: 0, pointHeldTime: 0 } },
     rules: { income: true, respawn: true },
+    drafted: { US: false, PAVN: false },
+    cooldowns: { US: zeroCooldowns(), PAVN: zeroCooldowns() },
+    recons: [],
+    supplies: [],
+    strafes: [],
+    barrages: [],
+    tankRespawnUsed: {},
   };
   return state;
 }
 
+export const zeroCooldowns = (): Record<AbilityKind, number> => ({ recon: 0, strafe: 0, barrage: 0, supply: 0, garrison: 0, redeploy: 0 });
+
 export function emptyVisible(side: Side): VisibleState {
-  return { side, enemyDots: [], enemyGarrisons: [], enemyOps: [], ghosts: [], dotVisible: new Uint8Array(0), garrisonVisible: new Uint8Array(0), opVisible: new Uint8Array(0) };
+  return { side, own: { squads: [], garrisons: [], res: { wb: 0, mun: 0, man: 0, fuel: 0 }, cooldowns: zeroCooldowns(), supplies: [] }, pub: { points: [], active: 0, sectorX: 0, timer: 0, phase: 'draft' }, enemyDots: [], enemyGarrisons: [], enemyOps: [], ghosts: [], dotVisible: new Uint8Array(0), garrisonVisible: new Uint8Array(0), opVisible: new Uint8Array(0) };
 }
 
 export function createGarrison(state: GameState, side: Side, pos: Vec): Garrison {
-  const g: Garrison = { id: state.garrisons.length, side, pos: v(pos.x, pos.y), state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null };
+  const g: Garrison = { id: state.garrisons.length, side, pos: v(pos.x, pos.y), hp: CONFIG.GARRISON_HP, state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null };
   state.garrisons.push(g);
   return g;
 }

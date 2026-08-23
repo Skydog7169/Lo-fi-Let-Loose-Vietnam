@@ -5,7 +5,7 @@ import type { GameState, Side } from '../state';
 import { incomePerMinute } from '../systems/economy';
 import { fmtTime } from '../systems/match';
 import { dotsOnActivePoint } from '../systems/capture';
-import { ownedGarrisons, spawnPointFor } from '../systems/spawning';
+import { ownedGarrisons } from '../systems/spawning';
 import type { UiState } from './input';
 import { sideColor } from '../render/draw';
 
@@ -86,16 +86,6 @@ function drawBottom(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState
   text(ctx, `tick ${state.tick}  fps ${fps.toFixed(0)}  zoom ${ui.cam.zoom.toFixed(2)}${ui.revealAll ? '  [REVEAL ALL]' : ''}${modeTxt}`, 8, H - 11, C.hudDim, '10px monospace');
   text(ctx, 'drag flag: attack  right-drag: defend  click garrison: redeploy  G: new garrison  F: reveal  P: paths  R: cam', W - 8, H - 11, C.hudDim, '10px monospace', 'right');
 
-  // squad roster (debug strip, left) — Phase 4 replaces with chips
-  let y = TOP_BAR_H + 12;
-  for (const sq of state.squads) {
-    if (sq.side !== ui.player && !ui.revealAll) continue;
-    const alive = sq.dotIds.filter((id) => state.dots[id]!.alive).length;
-    const sp = spawnPointFor(state, sq);
-    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(6, y - 7, 210, 13);
-    text(ctx, `${sq.side} ${sq.label} ${sq.kind.padEnd(9)} ${alive}/${sq.dotIds.length} ${sq.state.padEnd(10)} ${sp.kind}`, 10, y, sideColor(sq.side), '10px monospace');
-    y += 13;
-  }
 }
 
 function drawOverlay(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState): void {

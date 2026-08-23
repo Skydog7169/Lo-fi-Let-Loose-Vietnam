@@ -7,7 +7,12 @@ import { stepSim, TICK_DT } from './sim';
 import { attachInput, createUiState, updateViewport } from './ui/input';
 import { drawHud } from './ui/hud';
 import { buildStaticLayer, drawWorld } from './render/draw';
-import { profilePaths, runMany, runScenario } from './devtools';
+import { profilePaths, runAiMatch, runMany, runScenario } from './devtools';
+import { makeCommanderAi } from './systems/commander_ai';
+import { drawOrders } from './ui/orders';
+import { drawRoster } from './ui/roster';
+import { drawDraft } from './ui/draft';
+import { autoPlaceUsGarrisons } from './scenarios';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -16,6 +21,12 @@ const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed') ?? 1);
 const scenario = params.get('scenario') ?? CONFIG.SCENARIO;
 if (params.get('setup') === '0') (CONFIG as { SKIP_SETUP: boolean }).SKIP_SETUP = true;
+{
+  const diff = params.get('ai') ?? CONFIG.AI_DIFFICULTY;
+  const preset = CONFIG.AI_DIFFICULTY_PRESETS[diff] ?? CONFIG.AI_DIFFICULTY_PRESETS['normal']!;
+  (CONFIG as { AI_CADENCE: number }).AI_CADENCE = preset.cadence;
+  (CONFIG as { AI_BONUS_WB: number }).AI_BONUS_WB = preset.bonusWb;
+}
 let state = createInitialState(seed, scenario);
 if (CONFIG.SKIP_SETUP && state.phase === 'setup') state.phase = 'play';
 const ui = createUiState();
@@ -24,6 +35,9 @@ const commanders: Record<Side, ReturnType<typeof makeCommander>> = {
   PAVN: makeCommander(() => state, 'PAVN'),
 };
 const staticLayer = buildStaticLayer(state.map);
+// The enemy commander: scripted AI behind the same interface as the human.
+let ai = makeCommanderAi('PAVN', commanders.PAVN, state.map, state.grid, seed);
+let autoPlaced = false;
 
 function resize(): void {
   const dpr = window.devicePixelRatio || 1;
@@ -49,11 +63,17 @@ function frame(now: number): void {
   fps = fps * 0.9 + (1 / Math.max(dt, 1e-6)) * 0.1;
   acc += dt;
   while (acc >= TICK_DT) {
-    stepSim(state);
+    tickOnce();
     acc -= TICK_DT;
   }
   render();
   requestAnimationFrame(frame);
+}
+
+function tickOnce(): void {
+  ai.update(state.time);
+  if (CONFIG.SKIP_SETUP && state.phase === 'setup' && !autoPlaced) { autoPlaceUsGarrisons(state); commanders.US.setupDone(); autoPlaced = true; }
+  stepSim(state);
 }
 
 function render(): void {
@@ -67,6 +87,9 @@ function render(): void {
   ctx.beginPath(); ctx.rect(0, 0, CONFIG.LOGICAL_W, CONFIG.LOGICAL_H); ctx.clip();
   drawWorld(ctx, staticLayer, state, ui);
   drawHud(ctx, state, ui, fps);
+  drawOrders(ctx, state, ui);
+  drawRoster(ctx, state, ui);
+  if (state.phase === 'draft') drawDraft(ctx, state, ui, ui.draft);
   ctx.restore();
 }
 
@@ -77,9 +100,10 @@ requestAnimationFrame(frame);
   get state() { return state; },
   ui,
   commanders,
-  reset: (s: number, sc?: string) => { state = createInitialState(s, sc ?? state.scenario); },
-  /** Advance the sim n ticks and redraw — used for headless/background-tab testing. */
-  step: (n: number) => { for (let i = 0; i < n; i++) stepSim(state); render(); },
+  reset: (s: number, sc?: string) => { state = createInitialState(s, sc ?? state.scenario); ai = makeCommanderAi('PAVN', commanders.PAVN, state.map, state.grid, s); autoPlaced = false; ui.draft.done = false; },
+  /** Advance the sim n ticks (AI included) and redraw — used for headless/background-tab testing. */
+  step: (n: number) => { for (let i = 0; i < n; i++) tickOnce(); render(); },
+  runAiMatch,
   render,
   runScenario,
   runMany,
