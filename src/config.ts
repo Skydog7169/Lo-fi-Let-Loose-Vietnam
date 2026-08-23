@@ -111,7 +111,7 @@ export const CONFIG = {
   SUPPRESSED_TARGET_VULNERABILITY: 0.25, // hit chance vs a target × (1 + this × its suppression): pinned men are easier to hit
   // local numbers (friends vs enemies within LOCAL_RATIO_R of the squad centre)
   LOCAL_RATIO_R: 110,
-  SUPERIORITY_RATIO: 1.5, // friends:enemies at/above this = superior (push); at/below 1/this = outnumbered
+  SUPERIORITY_RATIO: 2, // friends:enemies at/above this = superior (push); at/below 1/this = outnumbered
   SHAKEN_FIRE_MULT: 0.35, // an outnumbered + pinned ("shaken") squad fires at this fraction
   SHAKEN_HIT_BONUS: 0.5, // ...and is hit this much more often
   PUSH_STOP_FRACTION: 0.3, // superior attackers keep closing to this × range (instead of ENGAGE_STOP_FRACTION)
@@ -149,9 +149,9 @@ export const CONFIG = {
   // ---- Capture points ----
   POINT_RADIUS: 60,
   POINT_COUNT: 5,
-  CAPTURE_SECONDS_PER_DOT: 45, // 1 dot of superiority captures in this long; rate scales with superiority
+  CAPTURE_SECONDS_PER_DOT: 60, // 1 dot of superiority captures in this long; rate scales with superiority
   CAPTURE_ROLLBACK_MULT: 0.5, // defender superiority rolls progress back at this fraction of the capture rate
-  CAPTURE_MAX_SUPERIORITY: 4, // superiority beyond this does not speed capture
+  CAPTURE_MAX_SUPERIORITY: 3, // superiority beyond this does not speed capture
   ASSAULT_R: 40, // an attack flag within this of the active point = assault: dots push into the circle regardless of odds
 
   // ---- Spawning (bible §6) ----
@@ -246,11 +246,11 @@ export const CONFIG = {
   AI_POINT_SQUADS: 2, // squads kept on the active point
 
   // ---- Offensive-mode asymmetry (playtest): the attacker gets more bodies, like HLL offensive tickets ----
-  ATTACKER_MANPOWER_MULT: 1.35,
+  ATTACKER_MANPOWER_MULT: 1.0, // off (playtest preferred assault + spawn lock alone)
   SPAWN_REVEAL_R: 220, // a garrison/OP that spawns troops with an enemy dot this close is revealed…
-  SPAWN_REVEAL_S: 8, // …for this long (the noise of a spawn wave)
+  SPAWN_REVEAL_S: 0, // off (0 = spawning makes no noise)
   ACTIVE_POINT_SPAWN_LOCK_R: 190, // garrisons/OPs this close to the contested point cannot spawn (both sides) — no 2-second reinforcement loops
-  FIRE_REVEAL_S: 1.5, // a dot that fires is visible to the enemy this long, even in cover (tracers give it away)…
+  FIRE_REVEAL_S: 0, // off (0 = firing does not reveal a concealed dot)
   FIRE_REVEAL_R: 260, // …if any enemy dot is this close
 
   // ---- Vision & fog (bible §5) ----
