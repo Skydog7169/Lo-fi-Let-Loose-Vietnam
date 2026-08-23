@@ -242,8 +242,25 @@ function defendSpot(state: GameState, squad: Squad, marker: Vec): Vec {
   return best ?? marker;
 }
 
+/** A visible enemy garrison/OP within SPAWN_HUNT_R of `goal` — squads walk onto those and kill them. */
+function spawnToHunt(state: GameState, squad: Squad, goal: Vec): Vec | null {
+  const vs = state.vis[squad.side];
+  const R2 = CONFIG.SPAWN_HUNT_R ** 2;
+  let best: Vec | null = null, bd = Infinity;
+  for (const g of vs.enemyGarrisons) { const d2 = (g.pos.x - goal.x) ** 2 + (g.pos.y - goal.y) ** 2; if (d2 <= R2 && d2 < bd) { bd = d2; best = g.pos; } }
+  for (const o of vs.enemyOps) { const d2 = (o.pos.x - goal.x) ** 2 + (o.pos.y - goal.y) ** 2; if (d2 <= R2 && d2 < bd) { bd = d2; best = o.pos; } }
+  return best;
+}
+
 /** Where the squad is actually trying to go right now. */
 export function resolveGoal(state: GameState, squad: Squad): Vec | null {
+  const base = resolveBaseGoal(state, squad);
+  if (!base || squad.fallback || squad.kind === 'artillery') return base;
+  // garrisons die to a dot standing next to them: stomp any visible enemy spawn near the objective
+  return spawnToHunt(state, squad, base) ?? base;
+}
+
+function resolveBaseGoal(state: GameState, squad: Squad): Vec | null {
   if (squad.fallback) return squad.fallback;
   if (!squad.marker) return null;
   if (squad.marker.kind === 'defend') {
@@ -324,9 +341,10 @@ export function updateMovement(state: GameState, dt: number): void {
         // Defenders halt where they stand; attackers keep closing on their target until comfortably inside range.
         if (!squad.marker || squad.marker.kind !== 'attack' || squad.fallback) continue;
         const tgt = state.dots[dot.targetId]!;
-        // with local superiority, keep pushing in (overrun range); otherwise hold at normal engagement distance
-        const superior = squad.localRatio >= CONFIG.SUPERIORITY_RATIO;
-        const r = rangeFor(state, dot, tgt) * (superior ? CONFIG.PUSH_STOP_FRACTION : CONFIG.ENGAGE_STOP_FRACTION);
+        // with local superiority, keep pushing in (overrun range); otherwise hold at normal engagement distance.
+        // Tanks are mobile guns: they stand off near max range and never push.
+        const superior = !vehicle && squad.localRatio >= CONFIG.SUPERIORITY_RATIO;
+        const r = rangeFor(state, dot, tgt) * (vehicle ? CONFIG.TANK_STANDOFF_FRACTION : superior ? CONFIG.PUSH_STOP_FRACTION : CONFIG.ENGAGE_STOP_FRACTION);
         const toE = sub(tgt.pos, dot.pos);
         const dE = Math.hypot(toE.x, toE.y);
         if (dE <= r + 1 || (!superior && enemyWithin(state, dot, CONFIG.ENGAGE_MIN_DIST))) continue; // +1px hysteresis: no jitter at the boundary

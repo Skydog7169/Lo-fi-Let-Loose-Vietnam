@@ -74,12 +74,20 @@ export const CONFIG = {
   INF_DAMAGE: 20,
   RECON_DAMAGE_MULT: 0.7, // recon squads are weaker in fights
   AT_GUNNERS_PER_SQUAD: 2, // slots 1..N of an AT squad carry the AT weapon
-  AT_FIRE_INTERVAL: 3.0,
-  AT_HIT_CHANCE: 0.5,
+  AT_FIRE_INTERVAL: 2.0,
+  AT_HIT_CHANCE: 0.6,
   AT_DAMAGE: 150,
-  TANK_MG_FIRE_INTERVAL: 0.3,
-  TANK_MG_HIT_CHANCE: 0.35,
-  TANK_MG_DAMAGE: 34,
+  // tank: HE rounds vs infantry (area), AP vs armour. Tanks stand off — they never push/close like infantry.
+  TANK_HE_FIRE_INTERVAL: 2.0,
+  TANK_HE_HIT_CHANCE: 0.7, // lands on the target; a miss scatters TANK_HE_SCATTER px
+  TANK_HE_SCATTER: 14,
+  TANK_HE_DAMAGE: 55, // to every enemy infantry dot within TANK_HE_SPLASH_R
+  TANK_HE_COVER_MULT: 0.5, // woods/buildings soak splash
+  TANK_HE_SPLASH_R: 18,
+  TANK_HE_SUPPRESS_R: 36,
+  TANK_HE_SUPPRESS: 0.6,
+  TANK_HE_FLIGHT: 0.35,
+  TANK_STANDOFF_FRACTION: 0.9, // tanks hold at this × range and never close further
   TANK_GUN_FIRE_INTERVAL: 2.5,
   TANK_GUN_HIT_CHANCE: 0.6,
   TANK_GUN_DAMAGE: 150,
@@ -149,6 +157,7 @@ export const CONFIG = {
   GARRISON_MIN_POINT_DIST: 100, // px from any capture point
   GARRISON_DISABLE_R: 50, // enemy dot inside → no spawns
   GARRISON_DESTROY_SECONDS: 10, // continuous enemy presence → destroyed
+  SPAWN_HUNT_R: 90, // a squad whose goal is within this of a visible enemy garrison/OP walks onto it instead
   GARRISON_COST_WB: 300,
   GARRISON_COOLDOWN: 120,
   GARRISON_REQUIRES_SUPPLY: true, // Phase 4: needs a supply drop within SUPPLY_RADIUS
@@ -182,7 +191,8 @@ export const CONFIG = {
   TANK_CAP: 2,
   ARTILLERY_CAP: 1,
   AI_DRAFT: { infantry: 3, at: 1, recon: 1, tank: 1, artillery: 0 } as Record<string, number>, // 3×100+150+125+250 = 825 → 175 WB carried
-  TANK_RESPAWN_FUEL: 300, // one respawn per tank slot per match
+  TANK_RESPAWN_FUEL: 150, // Fuel per tank respawn (at the HQ, on the wave)
+  TANK_RESPAWNS_PER_SLOT: 99, // bible says 1; playtest wanted tanks back in the fight
 
   // ---- Commander abilities (bible §8) ----
   ABILITY: {

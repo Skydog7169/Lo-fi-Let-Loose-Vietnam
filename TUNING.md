@@ -8,3 +8,4 @@ Every number is in `src/config.ts`. Things the headless suite already tells us (
 - **Artillery battery** (30 shells) wipes a stationary village squad by itself in ~35 s — probably too strong; consider `ARTY_SHELL_DAMAGE` 60→40 or fewer shells.
 - **Economy:** base Manpower 50/min is 10 soldiers/min; the defender holding 5 points gets 175/min. Expect the first real playtest to want `MAN_BASE` up or `MANPOWER_PER_SOLDIER` down for the attacker.
 - **Garrison loss** is permanent and the AI will find an undefended rear garrison via the north corridor within ~90 s. If that feels unfair, raise `GARRISON_DESTROY_SECONDS` or lower `VISION_RECON`.
+- **Tanks:** HE 55 dmg / 18 px splash every 2 s, standing off at 135 px; an AT squad (2 gunners, 2 s, 60%, 150) kills a tank in ~7 s if it comes within 60 px of them in cover. If tanks feel too safe, lower `TANK_STANDOFF_FRACTION` or `TANK_COVER_SPOT_RANGE`.

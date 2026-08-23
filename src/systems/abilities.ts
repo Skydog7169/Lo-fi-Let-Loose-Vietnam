@@ -137,7 +137,7 @@ export function updateAbilities(state: GameState, dt: number): void {
       b.nextShell = CONFIG.BARRAGE_DURATION / CONFIG.BARRAGE_SHELLS;
       const ang = rand(state.rng) * Math.PI * 2, rad = Math.sqrt(rand(state.rng)) * b.r;
       const to = v(b.pos.x + Math.cos(ang) * rad, b.pos.y + Math.sin(ang) * rad);
-      state.shells.push({ to, t: CONFIG.ARTY_FLIGHT_TIME, side: b.side });
+      state.shells.push({ to, t: CONFIG.ARTY_FLIGHT_TIME, side: b.side, kind: 'arty' });
       const from = v(b.side === 'US' ? -20 : state.map.width + 20, to.y - 120);
       pushEffect(state, { kind: 'shell', from, to, ttl: CONFIG.ARTY_FLIGHT_TIME, max: CONFIG.ARTY_FLIGHT_TIME });
     }

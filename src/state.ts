@@ -127,7 +127,7 @@ export interface GameState {
   dots: Dot[];
   pendingCommands: Command[];
   effects: Effect[];
-  shells: { to: Vec; t: number; side: Side }[]; // artillery rounds in flight
+  shells: { to: Vec; t: number; side: Side; kind: 'arty' | 'he' }[]; // rounds in flight
   scenario: string;
   // ---- match ----
   phase: MatchPhase;
@@ -149,7 +149,7 @@ export interface GameState {
   supplies: Supply[];
   strafes: Strafe[];
   barrages: Barrage[];
-  tankRespawnUsed: Record<number, boolean>; // by squad id
+  tankRespawns: Record<number, number>; // by squad id
 }
 
 let nextSquadId = 0;
@@ -255,7 +255,7 @@ export function createEmptyState(seed: number, scenario: string): GameState {
     supplies: [],
     strafes: [],
     barrages: [],
-    tankRespawnUsed: {},
+    tankRespawns: {},
   };
   return state;
 }

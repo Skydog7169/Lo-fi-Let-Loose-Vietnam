@@ -69,7 +69,7 @@ export function drawRoster(ctx: CanvasRenderingContext2D, state: GameState, ui: 
     }
     // spawn status
     ctx.fillStyle = sp.kind === 'op' ? '#8fd18f' : sp.kind === 'garrison' ? '#f2d27a' : C.hudDim; ctx.font = '8px monospace'; ctx.textAlign = 'right';
-    ctx.fillText(sq.kind === 'artillery' ? `${state.dots[sq.dotIds[0]!]!.shells} sh` : sq.kind === 'tank' ? (state.tankRespawnUsed[sq.id] ? 'no resp' : `${alive ? '' : 'resp '}${CONFIG.TANK_RESPAWN_FUEL}F`) : `@${sp.kind.toUpperCase()}`, x + CHIP_W - 5, y + 21);
+    ctx.fillText(sq.kind === 'artillery' ? `${state.dots[sq.dotIds[0]!]!.shells} sh` : sq.kind === 'tank' ? ((state.tankRespawns[sq.id] ?? 0) >= CONFIG.TANK_RESPAWNS_PER_SLOT ? 'no resp' : `${alive ? '' : 'resp '}${CONFIG.TANK_RESPAWN_FUEL}F`) : `@${sp.kind.toUpperCase()}`, x + CHIP_W - 5, y + 21);
   }
   ctx.restore();
 }
