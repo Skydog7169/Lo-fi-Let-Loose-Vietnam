@@ -5,7 +5,7 @@ import { cellCenter, cellOf, isCoverAt, isWalkable } from '../map/grid';
 import { aliveDots, isVehicle, type Dot, type GameState, type Side, type Squad } from '../state';
 import { dist2, norm, sub, v, type Vec } from '../vec';
 import { rand } from '../rng';
-import { squadCentroid, squadsInOrder } from '../state';
+import { pushEffect, squadCentroid, squadsInOrder } from '../state';
 
 /** Can this shooter hurt that target at all? Small arms never damage armour (bible §9.4). */
 export function canDamage(state: GameState, shooter: Dot, target: Dot): boolean {
@@ -102,6 +102,12 @@ export function threatDirection(state: GameState, squad: Squad, from: Vec): Vec 
   return norm(sub(v(hq.x + hq.w / 2, hq.y + hq.h / 2), from));
 }
 
+function overrun(state: GameState, d: Dot): void {
+  d.alive = false; d.hp = 0; d.targetId = -1; d.coverSeek = null;
+  state.stats[d.side].casualties++;
+  pushEffect(state, { kind: 'death', pos: v(d.pos.x, d.pos.y), side: d.side, ttl: CONFIG.DEATH_TTL, max: CONFIG.DEATH_TTL });
+}
+
 export function updateSquadAi(state: GameState): void {
   const aliveBySide: Record<Side, Dot[]> = { US: [], PAVN: [] };
   for (const d of state.dots) if (d.alive) aliveBySide[d.side].push(d);
@@ -122,6 +128,30 @@ export function updateSquadAi(state: GameState): void {
     }
     const avgSupp = suppSum / alive.length;
     const pinned = avgSupp > CONFIG.SUPPRESS_PIN_THRESHOLD;
+
+    // ---- local numbers: who has the weight of fire here? ----
+    if (scanNow) {
+      const c = squadCentroid(state, squad)!;
+      const R2 = CONFIG.LOCAL_RATIO_R ** 2;
+      let friends = 0, foes = 0;
+      for (const d of state.dots) {
+        if (!d.alive || dist2(d.pos, c) > R2) continue;
+        if (state.squads[d.squadId]!.kind === 'artillery') continue;
+        if (d.side === squad.side) friends++; else foes++;
+      }
+      squad.localRatio = foes === 0 ? Infinity : friends / foes;
+    }
+    squad.shaken = pinned && squad.localRatio <= 1 / CONFIG.SUPERIORITY_RATIO;
+    // overrun: a shaken dot with an enemy at arm's length is routed
+    if (squad.shaken) {
+      const o2 = CONFIG.OVERRUN_DIST ** 2;
+      for (const d of alive) {
+        for (const e of enemies) {
+          if (dist2(d.pos, e.pos) <= o2) { overrun(state, d); break; }
+        }
+      }
+      if (!alive.some((d) => d.alive)) { squad.state = 'IDLE'; squad.fallback = null; continue; } // wiped out by the overrun
+    }
 
     // ---- FALLBACK ----
     if (CONFIG.FALLBACK_ENABLED && squad.kind !== 'artillery') {

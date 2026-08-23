@@ -108,6 +108,21 @@ export const SCENARIOS: Record<string, (s: GameState) => void> = {
     place(s, 'US', 'infantry', 'A', v(640, 250), { kind: 'attack', pos: v(940, 250) });
     place(s, 'PAVN', 'infantry', 'A', v(940, 250), { kind: 'attack', pos: v(640, 250) });
   },
+  /** Numbers: two US squads vs one PAVN squad in the open — should be quick and end with a push. */
+  outnumber(s) {
+    combatOnly(s);
+    place(s, 'PAVN', 'infantry', 'A', v(660, 440), { kind: 'defend', pos: v(660, 440) });
+    place(s, 'US', 'infantry', 'A', v(920, 420), { kind: 'attack', pos: v(640, 430) });
+    place(s, 'US', 'infantry', 'B', v(920, 470), { kind: 'attack', pos: v(640, 460) });
+  },
+  /** Numbers vs cover: three US squads vs one PAVN squad dug into the SW woods edge. */
+  outnumber_cover(s) {
+    combatOnly(s);
+    place(s, 'PAVN', 'infantry', 'A', v(300, 560), { kind: 'defend', pos: v(300, 560) });
+    place(s, 'US', 'infantry', 'A', v(480, 520), { kind: 'attack', pos: v(300, 560) });
+    place(s, 'US', 'infantry', 'B', v(480, 560), { kind: 'attack', pos: v(300, 580) });
+    place(s, 'US', 'infantry', 'C', v(480, 600), { kind: 'attack', pos: v(300, 600) });
+  },
   /** Mirror of meet (PAVN starts west) — checks for side-order bias. */
   meet_rev(s) {
     combatOnly(s);

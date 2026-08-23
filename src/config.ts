@@ -70,7 +70,7 @@ export const CONFIG = {
   TANK_RANGE: 150,
   TANK_COVER_SPOT_RANGE: 60, // tanks only see concealed infantry this close (woods spotting penalty)
   INF_FIRE_INTERVAL: 0.6, // s between shots per dot
-  INF_HIT_CHANCE: 0.12,
+  INF_HIT_CHANCE: 0.13,
   INF_DAMAGE: 20,
   RECON_DAMAGE_MULT: 0.7, // recon squads are weaker in fights
   AT_GUNNERS_PER_SQUAD: 2, // slots 1..N of an AT squad carry the AT weapon
@@ -100,6 +100,14 @@ export const CONFIG = {
   SUPPRESS_ACC_MULT_MAX: 0.5,
   SUPPRESS_SPEED_MULT_MAX: 0.5,
   SUPPRESS_PIN_THRESHOLD: 0.6, // squad avg suppression above this = SUPPRESSED (holds position)
+  SUPPRESSED_TARGET_VULNERABILITY: 0.25, // hit chance vs a target × (1 + this × its suppression): pinned men are easier to hit
+  // local numbers (friends vs enemies within LOCAL_RATIO_R of the squad centre)
+  LOCAL_RATIO_R: 110,
+  SUPERIORITY_RATIO: 2, // friends:enemies at/above this = superior (push); at/below 1/this = outnumbered
+  SHAKEN_FIRE_MULT: 0.35, // an outnumbered + pinned ("shaken") squad fires at this fraction
+  SHAKEN_HIT_BONUS: 0.5, // ...and is hit this much more often
+  PUSH_STOP_FRACTION: 0.3, // superior attackers keep closing to this × range (instead of ENGAGE_STOP_FRACTION)
+  OVERRUN_DIST: 26, // a shaken dot with an enemy this close is overrun (routed/killed)
   FALLBACK_ENABLED: true,
   FALLBACK_STRENGTH_FRACTION: 0.34, // pinned AND at/below this fraction alive → FALLBACK
   FALLBACK_RECOVER_SUPPRESSION: 0.2,

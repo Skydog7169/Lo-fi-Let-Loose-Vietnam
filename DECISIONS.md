@@ -49,3 +49,10 @@ Ambiguities resolved while building. Each is the simplest reading of the bible, 
 - **Infiltration plan:** a fixed corridor route along y≈85 (PAVN: 900→700→ford→380, US mirrored) ending `140px` behind the enemy side of the sector line; at the end it attacks any visible enemy garrison/OP in the rear, else holds in the trees. Verified headlessly against a passive human (`npm run headless -- infiltrate`): 6/6 seeds run the corridor and disable/destroy a US rear garrison.
 - **AI-vs-AI** (`npm run headless -- aimatch`) is the full-match smoke test; both capture and time-out endings occur across seeds; annihilation is covered by the `win_annihilate` scenario and the playable `endgame` scenario.
 - **Roster chips** replace the debug squad strip; clicking a chip centres the camera. The end screen shows point-minutes, casualties and garrisons lost.
+
+## Post-v1 playtest fixes
+
+- **Numbers matter (local force ratio).** Each squad tracks friends÷enemies within `LOCAL_RATIO_R`. Pinned *and* outnumbered ≥`SUPERIORITY_RATIO`:1 → **shaken**: fires at `SHAKEN_FIRE_MULT`, is hit `SHAKEN_HIT_BONUS` more, and any shaken dot with an enemy inside `OVERRUN_DIST` is overrun (killed). Superior attackers keep closing to `PUSH_STOP_FRACTION` × range (ignoring `ENGAGE_MIN_DIST`) — that is the push, and it is what gets them onto the enemy OP. Pinned targets are also generally easier to hit (`SUPPRESSED_TARGET_VULNERABILITY`). Net: 2v1 in the open ends in ~10 s, 3v1 vs cover ~10 s (overrun), equal open fights ~30 s, woods defender still beats an equal open attacker.
+- **Attacker AI masses** all non-infiltrator infantry on the active point (spread around it) instead of two-plus-flankers, because numbers now decide.
+- **Respawn rejoin paths** run even when the squad's own path is finished (reinforcements rally to the flag without a new order).
+- **Input:** left-drag a squad (dots or flag) = attack, right-drag = defend, left-drag a garrison = move/redeploy; every rejected drop shows a toast explaining why.

@@ -142,11 +142,13 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
       .filter((s) => s.id !== infiltratorId)
       .map((s) => ({ s, d: squadCenter(s) ? dist(squadCenter(s)!, activePos) : 9999 }))
       .sort((a, b) => a.d - b.d)
-      .slice(0, CONFIG.AI_POINT_SQUADS)
+      // defender keeps AI_POINT_SQUADS on the point and screens with the rest; attacker masses everything
+      // (numbers win firefights — see SUPERIORITY_RATIO), spreading squads around the point rather than stacking
+      .slice(0, side === 'US' ? 99 : CONFIG.AI_POINT_SQUADS)
       .map((x) => x.s);
     const pointIds = new Set(pointSquads.map((s) => s.id));
     pointSquads.forEach((s, i) => {
-      const off = v(-dirToEnemy * 30 + (i ? 0 : 10), (i % 2 ? 35 : -35));
+      const off = v(-dirToEnemy * 30 + (i ? 0 : 10), ((i % 2 ? 1 : -1) * (35 + Math.floor(i / 2) * 30)));
       const want = side === 'US' ? { kind: 'attack' as const, pos: v(activePos.x + off.x * 0.5, activePos.y + off.y * 0.5) } : { kind: 'defend' as const, pos: v(activePos.x + off.x, activePos.y + off.y) };
       if (!s.marker || s.marker.kind !== want.kind || dist(s.marker.pos, want.pos) > 12) cmd.issueMarker(s.id, want.kind, want.pos);
     });

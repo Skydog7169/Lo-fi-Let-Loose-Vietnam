@@ -324,10 +324,12 @@ export function updateMovement(state: GameState, dt: number): void {
         // Defenders halt where they stand; attackers keep closing on their target until comfortably inside range.
         if (!squad.marker || squad.marker.kind !== 'attack' || squad.fallback) continue;
         const tgt = state.dots[dot.targetId]!;
-        const r = rangeFor(state, dot, tgt) * CONFIG.ENGAGE_STOP_FRACTION;
+        // with local superiority, keep pushing in (overrun range); otherwise hold at normal engagement distance
+        const superior = squad.localRatio >= CONFIG.SUPERIORITY_RATIO;
+        const r = rangeFor(state, dot, tgt) * (superior ? CONFIG.PUSH_STOP_FRACTION : CONFIG.ENGAGE_STOP_FRACTION);
         const toE = sub(tgt.pos, dot.pos);
         const dE = Math.hypot(toE.x, toE.y);
-        if (dE <= r + 1 || enemyWithin(state, dot, CONFIG.ENGAGE_MIN_DIST)) continue; // +1px hysteresis: no jitter at the boundary
+        if (dE <= r + 1 || (!superior && enemyWithin(state, dot, CONFIG.ENGAGE_MIN_DIST))) continue; // +1px hysteresis: no jitter at the boundary
         const sp = base * speedAt(g, dot.pos, vehicle) * suppMult;
         const dir = norm(toE);
         dot.moving = true;

@@ -54,6 +54,8 @@ export interface Squad {
   path: Vec[]; // smoothed world waypoints toward marker
   pathGoal: Vec | null; // what the path was computed for
   state: SquadState;
+  localRatio: number; // friends ÷ enemies near the squad (Infinity = none near), refreshed each scan
+  shaken: boolean; // outnumbered and pinned: barely fires, easier to hit, can be overrun
   op: Vec | null; // this squad's outpost
   opTimer: number; // seconds stationary near marker & out of combat
   lastCentroid: Vec | null;
@@ -164,6 +166,8 @@ export function createSquad(state: GameState, side: Side, kind: SquadKind, label
     path: [],
     pathGoal: null,
     state: 'IDLE',
+    localRatio: Infinity,
+    shaken: false,
     op: null,
     opTimer: 0,
     lastCentroid: null,

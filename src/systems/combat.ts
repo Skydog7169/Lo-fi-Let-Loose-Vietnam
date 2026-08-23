@@ -54,6 +54,11 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
   let hit = w.hit * (1 - CONFIG.SUPPRESS_ACC_MULT_MAX * shooter.suppression);
   let dmg = w.dmg;
   if (covered) { hit *= CONFIG.COVER_HIT_MULT; dmg *= CONFIG.COVER_DMG_MULT; }
+  if (!targetVehicle) {
+    // weight of fire: pinned men are easier to hit; shaken (outnumbered + pinned) men more so
+    hit *= 1 + CONFIG.SUPPRESSED_TARGET_VULNERABILITY * target.suppression;
+    if (ts.shaken) hit *= 1 + CONFIG.SHAKEN_HIT_BONUS;
+  }
   const landed = rand(state.rng) < hit;
   if (landed) {
     target.hp -= dmg;
@@ -62,6 +67,7 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
   // suppression on hit or near miss (vehicles immune)
   if (!targetVehicle) target.suppression = Math.min(1, target.suppression + CONFIG.SUPPRESS_PER_SHOT);
   shooter.fireCooldown = w.interval / (1 - CONFIG.SUPPRESS_FIRE_MULT_MAX * shooter.suppression);
+  if (state.squads[shooter.squadId]!.shaken) shooter.fireCooldown /= CONFIG.SHAKEN_FIRE_MULT; // shaken: heads down
   shooter.facing = angleOf(sub(target.pos, shooter.pos));
 
   // effects
