@@ -34,14 +34,20 @@ export function makeCommander(state: () => GameState, side: Side): CommanderInte
   };
 }
 
-export type PlacementError = 'territory' | 'point' | 'terrain' | 'count' | 'wb' | 'cooldown' | 'supply' | 'phase';
+export type PlacementError = 'locked' | 'territory' | 'point' | 'terrain' | 'count' | 'wb' | 'cooldown' | 'supply' | 'phase';
 
 /** Why a garrison may not be placed here (null = ok). Shared by UI preview and command validation. */
 export function garrisonPlacementError(state: GameState, side: Side, pos: Vec, opts: { forRedeploy?: boolean } = {}): PlacementError | null {
   if (state.phase === 'ended') return 'phase';
   if (!isWalkable(state.grid, pos)) return 'terrain';
   if (!inOwnTerritory(state, side, pos)) return 'territory';
-  for (const p of state.map.points) if (dist(p.pos, pos) < CONFIG.GARRISON_MIN_POINT_DIST) return 'point';
+  for (let i = 0; i < state.map.points.length; i++) {
+    const p = state.map.points[i]!;
+    const ownedBehind = CONFIG.GARRISON_ON_OWNED_POINT && i !== state.active && state.points[i]!.owner === side;
+    if (ownedBehind) continue; // you may build right on a point you hold
+    if (dist(p.pos, pos) < CONFIG.GARRISON_MIN_POINT_DIST) return 'point';
+  }
+  if (state.active < state.map.points.length && dist(state.map.points[state.active]!.pos, pos) <= CONFIG.ACTIVE_POINT_SPAWN_LOCK_R) return 'locked';
   if (opts.forRedeploy) return null;
   const owned = state.garrisons.filter((g) => g.side === side && g.state !== 'destroyed').length;
   if (state.phase === 'setup') {

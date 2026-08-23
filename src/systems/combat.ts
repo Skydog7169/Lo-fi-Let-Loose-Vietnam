@@ -3,7 +3,7 @@
 import { CONFIG } from '../config';
 import { isCoverAt } from '../map/grid';
 import { rand } from '../rng';
-import { isVehicle, pushEffect, squadsInOrder, type Dot, type GameState, type Squad } from '../state';
+import { isVehicle, pushEffect, squadsInOrder, type Dot, type Garrison, type GameState, type Squad } from '../state';
 import { angleOf, dist2, fromAngle, sub, v, type Vec } from '../vec';
 import { isAtGunner } from './squad_ai';
 
@@ -149,6 +149,34 @@ export function shellImpact(state: GameState, p: Vec): void {
   pushEffect(state, { kind: 'impact', pos: v(p.x, p.y), r: CONFIG.ARTY_SPLASH_R, ttl: CONFIG.IMPACT_TTL, max: CONFIG.IMPACT_TTL });
 }
 
+/** Tanks and AT gunners with nothing else to shoot engage a visible enemy garrison in range. */
+function shootStructure(state: GameState, squad: Squad, d: Dot): void {
+  if (d.fireCooldown > 0) return;
+  const vis = state.vis[d.side];
+  const range = squad.kind === 'tank' ? CONFIG.TANK_RANGE : CONFIG.AT_RANGE_VS_ARMOR;
+  let best: Garrison | null = null, bd = range * range;
+  for (const g of state.garrisons) {
+    if (g.side === d.side || g.state === 'destroyed') continue;
+    if (!(vis.garrisonVisible.length > g.id && vis.garrisonVisible[g.id])) continue;
+    const d2 = dist2(g.pos, d.pos);
+    if (d2 <= bd) { bd = d2; best = g; }
+  }
+  if (!best) return;
+  const tank = squad.kind === 'tank';
+  d.facing = angleOf(sub(best.pos, d.pos));
+  d.firedAt = state.time;
+  d.fireCooldown = tank ? CONFIG.TANK_GUN_FIRE_INTERVAL : CONFIG.AT_FIRE_INTERVAL;
+  const landed = rand(state.rng) < CONFIG.STRUCTURE_HIT_CHANCE;
+  if (landed) {
+    best.hp -= tank ? CONFIG.TANK_STRUCTURE_DAMAGE : CONFIG.AT_STRUCTURE_DAMAGE;
+    if (best.hp <= 0) { best.state = 'destroyed'; best.disabled = false; state.stats[best.side].garrisonsLost++; }
+  }
+  const end = landed ? v(best.pos.x, best.pos.y) : v(best.pos.x + (rand(state.rng) - 0.5) * 16, best.pos.y + (rand(state.rng) - 0.5) * 16);
+  pushEffect(state, { kind: 'tracer', a: v(d.pos.x, d.pos.y), b: end, side: d.side, ttl: CONFIG.TRACER_TTL * 1.5, max: CONFIG.TRACER_TTL * 1.5 });
+  pushEffect(state, { kind: 'flash', pos: v(d.pos.x, d.pos.y), side: d.side, ttl: CONFIG.FLASH_TTL * 2, max: CONFIG.FLASH_TTL * 2 });
+  pushEffect(state, { kind: 'impact', pos: end, r: 6, ttl: CONFIG.IMPACT_TTL * 0.6, max: CONFIG.IMPACT_TTL * 0.6 });
+}
+
 export function updateCombat(state: GameState, dt: number): void {
   const decay = dt / CONFIG.SUPPRESS_DECAY_S;
   for (const squad of squadsInOrder(state)) {
@@ -158,7 +186,7 @@ export function updateCombat(state: GameState, dt: number): void {
       d.suppression = Math.max(0, d.suppression - decay);
       d.fireCooldown -= dt;
       if (squad.kind === 'artillery') { fireBattery(state, squad, d); continue; }
-      if (d.targetId < 0) continue;
+      if (d.targetId < 0) { if (!d.moving && (squad.kind === 'tank' || (squad.kind === 'at' && isAtGunner(d)))) shootStructure(state, squad, d); continue; }
       const t = state.dots[d.targetId];
       if (!t || !t.alive) { d.targetId = -1; continue; }
       if (d.moving) continue; // halt, face, fire — no shooting on the move

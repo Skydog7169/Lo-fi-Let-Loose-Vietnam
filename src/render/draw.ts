@@ -376,7 +376,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
   for (const g of state.garrisons) {
     if (g.state === 'destroyed') continue;
     if (g.side !== me && !ui.revealAll && !(vis.garrisonVisible.length > g.id && vis.garrisonVisible[g.id])) continue;
-    drawGarrison(ctx, g, state.time, cam.zoom, spawnLocked(state, g.pos));
+    drawGarrison(ctx, g, state.time, cam.zoom, spawnLocked(state, g.pos, g.side));
   }
   // OPs
   for (const sq of state.squads) {
@@ -533,7 +533,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
     ctx.beginPath(); ctx.arc(p.x, p.y, CONFIG.GARRISON_DISABLE_R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     if (err) {
       ctx.fillStyle = '#f66'; ctx.font = `bold ${9 / Math.sqrt(cam.zoom)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      const msg = { territory: 'OWN TERRITORY ONLY', point: '100px FROM POINTS', terrain: 'BAD GROUND', count: 'ALL PLACED', wb: 'NEED 300 WB', cooldown: 'COOLDOWN', supply: 'NEEDS SUPPLY DROP', phase: '' }[err];
+      const msg = { territory: 'OWN TERRITORY ONLY', point: '100px FROM UNHELD POINTS', locked: 'TOO CLOSE TO THE FIGHT', terrain: 'BAD GROUND', count: 'ALL PLACED', wb: `NEED ${CONFIG.ABILITY.garrison!.cost} WB`, cooldown: 'COOLDOWN', supply: 'NEEDS SUPPLY DROP', phase: '' }[err] ?? err;
       ctx.fillText(msg, p.x, p.y - 14 / Math.sqrt(cam.zoom));
     }
   }

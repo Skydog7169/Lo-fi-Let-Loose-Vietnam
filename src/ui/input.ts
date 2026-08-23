@@ -64,7 +64,8 @@ export function toast(ui: UiState, text: string, seconds = 2.5): void { ui.toast
 
 export const PLACEMENT_MSG: Record<string, string> = {
   territory: 'Own territory only (west of the dashed line)',
-  point: 'Must be 100px from any capture point',
+  point: 'Must be 100px from a point you don\'t hold',
+  locked: 'Too close to the contested point (spawns there are locked)',
   terrain: 'Can\'t place on water',
   count: 'All garrisons placed',
   wb: 'Not enough War Bonds',

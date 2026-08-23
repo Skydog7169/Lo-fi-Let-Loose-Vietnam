@@ -223,8 +223,11 @@ export const CONFIG = {
   BARRAGE_DURATION: 10,
   BARRAGE_DELAY: 3.0,
   SUPPLY_LIFETIME: 120, // seconds a drop stays usable
-  GARRISON_HP: 100, // shells: a garrison dies to a few direct hits
-  SHELL_SPAWN_DAMAGE: 60,
+  GARRISON_HP: 300, // structure hp: arty shells, tank AP and AT rockets chew it down
+  SHELL_SPAWN_DAMAGE: 100, // arty shell vs garrison (3 direct hits)
+  TANK_STRUCTURE_DAMAGE: 100, // tank AP round vs a visible enemy garrison (in TANK_RANGE, when it has no other target)
+  AT_STRUCTURE_DAMAGE: 60, // AT rocket vs a visible enemy garrison (in AT_RANGE_VS_ARMOR)
+  STRUCTURE_HIT_CHANCE: 0.7,
 
   // ---- Dig in (playtest addition): a squad holding a defend flag, still and out of contact, entrenches ----
   DIG_IN_SECONDS: 20,
@@ -253,6 +256,8 @@ export const CONFIG = {
   SPAWN_REVEAL_R: 220, // a garrison/OP that spawns troops with an enemy dot this close is revealed…
   SPAWN_REVEAL_S: 0, // off (0 = spawning makes no noise)
   ACTIVE_POINT_SPAWN_LOCK_R: 190, // garrisons/OPs this close to the contested point cannot spawn (both sides) — no 2-second reinforcement loops
+  // …except a garrison sitting ON a point you own (within POINT_RADIUS of a locked/held, non-active point): it always spawns.
+  GARRISON_ON_OWNED_POINT: true, // playtest: garrisons may be built on owned points (exempt from GARRISON_MIN_POINT_DIST); exposed, but a spawn right on the objective
   FIRE_REVEAL_S: 0, // off (0 = firing does not reveal a concealed dot)
   FIRE_REVEAL_R: 260, // …if any enemy dot is this close
 

@@ -40,16 +40,24 @@ export function ownedGarrisons(state: GameState, side: Side): Garrison[] {
 }
 
 /** Spawns this close to the contested point are locked (both sides): reinforcements must walk in. */
-export function spawnLocked(state: GameState, p: Vec): boolean {
+export function spawnLocked(state: GameState, p: Vec, side?: Side): boolean {
   if (state.active >= state.map.points.length) return false;
-  return dist2(p, state.map.points[state.active]!.pos) <= CONFIG.ACTIVE_POINT_SPAWN_LOCK_R ** 2;
+  if (dist2(p, state.map.points[state.active]!.pos) > CONFIG.ACTIVE_POINT_SPAWN_LOCK_R ** 2) return false;
+  // a garrison on a point you hold (not the contested one) always spawns
+  if (side && CONFIG.GARRISON_ON_OWNED_POINT) {
+    for (let i = 0; i < state.map.points.length; i++) {
+      if (i === state.active || state.points[i]!.owner !== side) continue;
+      if (dist2(p, state.map.points[i]!.pos) <= CONFIG.POINT_RADIUS ** 2) return false;
+    }
+  }
+  return true;
 }
 
 /** Nearest usable (active, not disabled, not locked) garrison to p, or null. */
 export function nearestSpawnGarrison(state: GameState, side: Side, p: Vec): Garrison | null {
   let best: Garrison | null = null, bd = Infinity;
   for (const g of state.garrisons) {
-    if (g.side !== side || g.state !== 'active' || g.disabled || spawnLocked(state, g.pos)) continue;
+    if (g.side !== side || g.state !== 'active' || g.disabled || spawnLocked(state, g.pos, side)) continue;
     const d = dist2(g.pos, p);
     if (d < bd) { bd = d; best = g; }
   }
