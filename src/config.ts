@@ -174,7 +174,7 @@ export const CONFIG = {
   OP_NEAR_MARKER_R: 80,
   OP_TOUCH_R: 30, // enemy dot this close deletes the OP
   OP_SLOW_SPEED: 8, // px/s centroid speed below which a squad counts as stationary
-  WAVE_SECONDS: 25,
+  WAVE_SECONDS: 20,
   MANPOWER_PER_SOLDIER: 5,
   HQ_SPAWN_SPREAD: 30,
   RESPAWN_REJOIN: true, // respawned dots path back to their squad
@@ -205,7 +205,7 @@ export const CONFIG = {
     recon: { cost: 150, pool: 'mun', cooldown: 120 },
     strafe: { cost: 300, pool: 'mun', cooldown: 240 },
     barrage: { cost: 250, pool: 'mun', cooldown: 180 },
-    supply: { cost: 100, pool: 'fuel', cooldown: 90 },
+    supply: { cost: 100, pool: 'fuel', cooldown: 60 },
     garrison: { cost: 200, pool: 'wb', cooldown: 120 },
     redeploy: { cost: 75, pool: 'wb', cooldown: 60 },
   } as Record<string, { cost: number; pool: 'wb' | 'mun' | 'man' | 'fuel'; cooldown: number }>,
