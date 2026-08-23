@@ -13,7 +13,7 @@ export const ABILITY_INFO: Record<AbilityKind, { name: string; hint: string; mod
   recon: { name: 'RECON FLIGHT', hint: 'reveal r200 · 30s', mode: 'circle' },
   strafe: { name: 'STRAFING RUN', hint: 'line · open inf', mode: 'line' },
   barrage: { name: 'ARTY BARRAGE', hint: 'area · 10s shells', mode: 'circle' },
-  supply: { name: 'SUPPLY DROP', hint: 'needed for garrison', mode: 'point' },
+  supply: { name: 'SUPPLY DROP', hint: 'lands instantly · lasts 2:00', mode: 'point' },
   garrison: { name: 'NEW GARRISON', hint: 'on supplied ground', mode: 'garrison' },
   redeploy: { name: 'REDEPLOY', hint: 'pack 30s · move', mode: 'pickGarrison' },
 };

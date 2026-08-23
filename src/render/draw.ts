@@ -442,7 +442,8 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
     ctx.restore();
     if (sp.side === me) {
       ctx.strokeStyle = 'rgba(217,179,107,0.5)'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(sp.pos.x, sp.pos.y, CONFIG.SUPPLY_RADIUS, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = C.supply; ctx.font = '8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(`${Math.ceil(sp.t)}s`, sp.pos.x, sp.pos.y + 7);
+      ctx.fillStyle = C.supply; ctx.font = '8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(`SUPPLIES READY · ${Math.ceil(sp.t)}s left`, sp.pos.x, sp.pos.y + 7); // lifetime, not a deploy timer
     }
   }
   for (const st of state.strafes) {
