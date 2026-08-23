@@ -8,7 +8,7 @@ npm run dev       # http://localhost:5174
 npm run build     # typecheck + production build
 ```
 
-**How to play:** draft a force (1000 WB), place 3 garrisons in your territory during setup (`G` + click, Enter when ready), then command: drag a squad's flag = attack order, right-drag = defend; click an Orders card (or keys `1–6`) and click the map to fire recon / strafing (two clicks: line) / barrage / supply drop / new garrison / redeploy; click a roster chip to find a squad. Capture all five points before the clock runs out; lose every garrison and every squad and you lose.
+**How to play:** draft a force (1000 WB), place 3 garrisons in your territory during setup (`G` + click, Enter when ready), then command: left-drag a squad (its dots or its flag) and drop = attack order, right-drag = defend; left-drag a garrison to move it (free during setup; 75 WB + 30 s packing in play); click an Orders card (or keys `1–6`) and click the map to fire recon / strafing (two clicks: line) / barrage / supply drop / new garrison / redeploy; click a roster chip to find a squad. Capture all five points before the clock runs out; lose every garrison and every squad and you lose.
 
 Other keys: drag map = pan; wheel = zoom; `F` = reveal fog (debug); `P` = paths; `R` = reset camera; `Esc` cancels a placement.
 

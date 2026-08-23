@@ -84,8 +84,21 @@ function drawBottom(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState
   ctx.fillStyle = C.hudBg; ctx.fillRect(0, H - 22, W, 22);
   const modeTxt = ui.mode.kind === 'placeGarrison' ? '  [PLACING GARRISON — click to place, right-click/Esc cancel]' : ui.mode.kind === 'redeploy' ? '  [REDEPLOY — click new spot, Esc cancel]' : '';
   text(ctx, `tick ${state.tick}  fps ${fps.toFixed(0)}  zoom ${ui.cam.zoom.toFixed(2)}${ui.revealAll ? '  [REVEAL ALL]' : ''}${modeTxt}`, 8, H - 11, C.hudDim, '10px monospace');
-  text(ctx, 'drag flag: attack  right-drag: defend  click garrison: redeploy  G: new garrison  F: reveal  P: paths  R: cam', W - 8, H - 11, C.hudDim, '10px monospace', 'right');
+  text(ctx, 'drag a squad or its flag: attack   right-drag: defend   drag a garrison: move it   1–6: orders   G: garrison   F: reveal', W - 8, H - 11, C.hudDim, '10px monospace', 'right');
 
+}
+
+function drawToast(ctx: CanvasRenderingContext2D, ui: UiState): void {
+  if (!ui.toast) return;
+  const W = CONFIG.LOGICAL_W, H = CONFIG.LOGICAL_H;
+  const a = Math.min(1, ui.toast.t / 0.4);
+  ctx.globalAlpha = a;
+  ctx.font = 'bold 12px monospace';
+  const tw = ctx.measureText(ui.toast.text).width + 28;
+  ctx.fillStyle = C.hudBg; ctx.fillRect(W / 2 - tw / 2, H - 96, tw, 26);
+  ctx.strokeStyle = '#f2d27a'; ctx.lineWidth = 1; ctx.strokeRect(W / 2 - tw / 2 + 0.5, H - 95.5, tw - 1, 25);
+  text(ctx, ui.toast.text, W / 2, H - 83, '#f2d27a', 'bold 12px monospace', 'center');
+  ctx.globalAlpha = 1;
 }
 
 function drawOverlay(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState): void {
@@ -94,7 +107,7 @@ function drawOverlay(ctx: CanvasRenderingContext2D, state: GameState, ui: UiStat
     const placed = ownedGarrisons(state, ui.player).length;
     ctx.fillStyle = C.hudBg; ctx.fillRect(W / 2 - 260, TOP_BAR_H + 8, 520, 44);
     text(ctx, `SETUP  ${fmtTime(state.setupTimer)} — place ${CONFIG.GARRISONS_AT_START} garrisons in your territory (${placed}/${CONFIG.GARRISONS_AT_START})`, W / 2, TOP_BAR_H + 22, C.hudText, 'bold 13px monospace', 'center');
-    text(ctx, ui.mode.kind === 'placeGarrison' ? 'click to place · ≥100px from points · right-click cancels' : 'press G to place · Enter when ready', W / 2, TOP_BAR_H + 40, C.hudDim, '10px monospace', 'center');
+    text(ctx, ui.mode.kind === 'placeGarrison' ? 'click to place · ≥100px from points · right-click cancels' : 'press G to place · drag a placed garrison to move it · Enter when ready', W / 2, TOP_BAR_H + 40, C.hudDim, '10px monospace', 'center');
   } else if (state.phase === 'ended' && state.result) {
     const H = CONFIG.LOGICAL_H;
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H);
@@ -119,5 +132,6 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: GameState, ui: UiS
   drawTopBar(ctx, state, ui);
   drawBottom(ctx, state, ui, fps);
   drawOverlay(ctx, state, ui);
+  drawToast(ctx, ui);
   ctx.restore();
 }

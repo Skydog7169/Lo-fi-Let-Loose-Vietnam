@@ -62,6 +62,7 @@ function frame(now: number): void {
   if (dt > CONFIG.MAX_FRAME_DT) dt = CONFIG.MAX_FRAME_DT;
   fps = fps * 0.9 + (1 / Math.max(dt, 1e-6)) * 0.1;
   acc += dt;
+  if (ui.toast) { ui.toast.t -= dt; if (ui.toast.t <= 0) ui.toast = null; }
   while (acc >= TICK_DT) {
     tickOnce();
     acc -= TICK_DT;

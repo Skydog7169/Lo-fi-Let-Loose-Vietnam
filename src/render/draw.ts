@@ -159,6 +159,10 @@ function drawSquad(ctx: CanvasRenderingContext2D, state: GameState, sq: Squad, u
     if (!d.alive || !visibleDot(state, ui, d)) continue;
     if (sq.kind === 'tank') { drawTank(ctx, d, col); continue; }
     if (sq.kind === 'artillery') { drawBattery(ctx, d, col); continue; }
+    if (ui.hoverSquadId === sq.id) { // grabbable: halo on hovered squad
+      ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS + 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
+    }
     ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS, 0, Math.PI * 2);
     ctx.fillStyle = col; ctx.fill();
     if (d.slot === 0) { ctx.strokeStyle = C.leaderRing; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS + 1.5, 0, Math.PI * 2); ctx.stroke(); }
@@ -487,6 +491,20 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.4 + 0.6 * pulse;
       ctx.beginPath(); ctx.arc(g.pos.x, g.pos.y, 14 / Math.sqrt(cam.zoom), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
     }
+  }
+
+  // garrison drag ghost
+  if (ui.drag?.kind === 'garrison' && ui.drag.moved) {
+    const g = state.garrisons[ui.drag.garrisonId]!;
+    const p = ui.drag.pos;
+    const err = garrisonPlacementError(state, me, p, { forRedeploy: true });
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(g.pos.x, g.pos.y); ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 0.85;
+    drawGarrison(ctx, { ...g, pos: p, disabled: false, state: 'active' }, state.time, cam.zoom);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = err ? '#f66' : '#8f8'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, CONFIG.GARRISON_DISABLE_R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
   }
 
   // placement preview
