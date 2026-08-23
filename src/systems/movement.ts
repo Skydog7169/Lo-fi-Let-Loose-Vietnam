@@ -242,6 +242,13 @@ function defendSpot(state: GameState, squad: Squad, marker: Vec): Vec {
   return best ?? marker;
 }
 
+/** Is this squad's attack flag on (or next to) the contested point? */
+export function isAssaultingPoint(state: GameState, squad: Squad): boolean {
+  if (!squad.marker || squad.marker.kind !== 'attack' || state.active >= state.map.points.length) return false;
+  const p = state.map.points[state.active]!.pos;
+  return dist(squad.marker.pos, p) <= CONFIG.POINT_RADIUS + CONFIG.ASSAULT_R;
+}
+
 /** A visible enemy garrison/OP within SPAWN_HUNT_R of `goal` — squads walk onto those and kill them. */
 function spawnToHunt(state: GameState, squad: Squad, goal: Vec): Vec | null {
   const vs = state.vis[squad.side];
@@ -256,8 +263,9 @@ function spawnToHunt(state: GameState, squad: Squad, goal: Vec): Vec | null {
 export function resolveGoal(state: GameState, squad: Squad): Vec | null {
   const base = resolveBaseGoal(state, squad);
   if (!base || squad.fallback || squad.kind === 'artillery') return base;
-  // garrisons die to a dot standing next to them: stomp any visible enemy spawn near the objective
-  return spawnToHunt(state, squad, base) ?? base;
+  // garrisons die to a dot standing next to them: stomp any visible enemy spawn near the objective or near us
+  const c = squadCentroid(state, squad);
+  return spawnToHunt(state, squad, base) ?? (c ? spawnToHunt(state, squad, c) : null) ?? base;
 }
 
 function resolveBaseGoal(state: GameState, squad: Squad): Vec | null {
@@ -343,7 +351,9 @@ export function updateMovement(state: GameState, dt: number): void {
         const tgt = state.dots[dot.targetId]!;
         // with local superiority, keep pushing in (overrun range); otherwise hold at normal engagement distance.
         // Tanks are mobile guns: they stand off near max range and never push.
-        const superior = !vehicle && squad.localRatio >= CONFIG.SUPERIORITY_RATIO;
+        // Assault: an attack flag on the active point means "get INTO the circle" — push regardless of odds.
+        const assault = !vehicle && isAssaultingPoint(state, squad);
+        const superior = !vehicle && (assault || squad.localRatio >= CONFIG.SUPERIORITY_RATIO);
         const r = rangeFor(state, dot, tgt) * (vehicle ? CONFIG.TANK_STANDOFF_FRACTION : superior ? CONFIG.PUSH_STOP_FRACTION : CONFIG.ENGAGE_STOP_FRACTION);
         const toE = sub(tgt.pos, dot.pos);
         const dE = Math.hypot(toE.x, toE.y);

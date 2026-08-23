@@ -39,11 +39,17 @@ export function ownedGarrisons(state: GameState, side: Side): Garrison[] {
   return state.garrisons.filter((g) => g.side === side && g.state !== 'destroyed');
 }
 
-/** Nearest usable (active, not disabled) garrison to p, or null. */
+/** Spawns this close to the contested point are locked (both sides): reinforcements must walk in. */
+export function spawnLocked(state: GameState, p: Vec): boolean {
+  if (state.active >= state.map.points.length) return false;
+  return dist2(p, state.map.points[state.active]!.pos) <= CONFIG.ACTIVE_POINT_SPAWN_LOCK_R ** 2;
+}
+
+/** Nearest usable (active, not disabled, not locked) garrison to p, or null. */
 export function nearestSpawnGarrison(state: GameState, side: Side, p: Vec): Garrison | null {
   let best: Garrison | null = null, bd = Infinity;
   for (const g of state.garrisons) {
-    if (g.side !== side || g.state !== 'active' || g.disabled) continue;
+    if (g.side !== side || g.state !== 'active' || g.disabled || spawnLocked(state, g.pos)) continue;
     const d = dist2(g.pos, p);
     if (d < bd) { bd = d; best = g; }
   }
@@ -87,7 +93,7 @@ function updateOps(state: GameState, dt: number): void {
 
 /** Where this squad's dead members come back: OP → nearest garrison → HQ. */
 export function spawnPointFor(state: GameState, sq: Squad): { pos: Vec; kind: 'op' | 'garrison' | 'hq' } {
-  if (sq.op) return { pos: sq.op, kind: 'op' };
+  if (sq.op && !spawnLocked(state, sq.op)) return { pos: sq.op, kind: 'op' };
   const c = squadCentroid(state, sq) ?? (sq.marker ? sq.marker.pos : hqCenter(state, sq.side));
   const g = nearestSpawnGarrison(state, sq.side, c);
   if (g) return { pos: g.pos, kind: 'garrison' };
@@ -143,6 +149,7 @@ function updateWaves(state: GameState, dt: number): void {
       const alive = aliveDots(state, sq);
       const sp = spawnPointFor(state, sq);
       if (sp.kind === 'hq' && !hqSpawnAllowed(state, side)) continue;
+      revealSpawn(state, sq, sp);
       const rejoinTo = alive.length ? squadCentroid(state, sq) : null;
       const rejoinPath = rejoinTo && dist(rejoinTo, sp.pos) > CONFIG.WAYPOINT_ARRIVE_R * 2 ? findPath(state.grid, sp.pos, rejoinTo, false) : null;
       for (const d of dead) {
@@ -153,6 +160,17 @@ function updateWaves(state: GameState, dt: number): void {
       if (!alive.length) { sq.pathGoal = null; sq.fallback = null; } // whole squad back: path to marker afresh
     }
   }
+}
+
+/** Spawning makes noise: if an enemy dot is within SPAWN_REVEAL_R of the spawn, it is revealed for SPAWN_REVEAL_S. */
+function revealSpawn(state: GameState, sq: Squad, sp: { pos: Vec; kind: 'op' | 'garrison' | 'hq' }): void {
+  if (sp.kind === 'hq') return;
+  const R2 = CONFIG.SPAWN_REVEAL_R ** 2;
+  let near = false;
+  for (const d of state.dots) if (d.alive && d.side !== sq.side && dist2(d.pos, sp.pos) <= R2) { near = true; break; }
+  if (!near) return;
+  if (sp.kind === 'op') sq.opRevealUntil = state.time + CONFIG.SPAWN_REVEAL_S;
+  else { const g = nearestSpawnGarrison(state, sq.side, sp.pos); if (g) g.revealUntil = state.time + CONFIG.SPAWN_REVEAL_S; }
 }
 
 /** The HQ is an ultimate fallback spawn only while the side still owns ≥1 garrison or has a living squad on the field. */

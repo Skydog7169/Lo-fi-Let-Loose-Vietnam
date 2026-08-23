@@ -53,6 +53,7 @@ function fireHe(state: GameState, shooter: Dot, target: Dot): void {
   const ang = rand(state.rng) * Math.PI * 2, sc = landed ? 0 : CONFIG.TANK_HE_SCATTER * (0.5 + 0.5 * rand(state.rng));
   const to = v(target.pos.x + Math.cos(ang) * sc, target.pos.y + Math.sin(ang) * sc);
   state.shells.push({ to, t: CONFIG.TANK_HE_FLIGHT, side: shooter.side, kind: 'he' });
+  shooter.firedAt = state.time;
   shooter.fireCooldown = w.interval;
   shooter.facing = angleOf(sub(target.pos, shooter.pos));
   pushEffect(state, { kind: 'tracer', a: v(shooter.pos.x, shooter.pos.y), b: to, side: shooter.side, ttl: CONFIG.TRACER_TTL * 1.5, max: CONFIG.TRACER_TTL * 1.5 });
@@ -101,6 +102,7 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
   }
   // suppression on hit or near miss (vehicles immune)
   if (!targetVehicle) target.suppression = Math.min(1, target.suppression + CONFIG.SUPPRESS_PER_SHOT);
+  shooter.firedAt = state.time;
   shooter.fireCooldown = w.interval / (1 - CONFIG.SUPPRESS_FIRE_MULT_MAX * shooter.suppression);
   if (state.squads[shooter.squadId]!.shaken) shooter.fireCooldown /= CONFIG.SHAKEN_FIRE_MULT; // shaken: heads down
   shooter.facing = angleOf(sub(target.pos, shooter.pos));

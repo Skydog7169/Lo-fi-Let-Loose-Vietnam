@@ -35,6 +35,7 @@ export interface Dot {
   coverSeek: Vec | null; // short step into adjacent cover while engaging
   moving: boolean; // moved this tick → cannot fire (halt, face, fire)
   digTimer: number; // seconds held still on a defend flag out of contact
+  firedAt: number; // sim time of last shot (muzzle flash reveal)
   dugIn: Vec | null; // entrenched at this position (cover bonus in the open)
   shells: number; // artillery battery ammo
 }
@@ -59,6 +60,7 @@ export interface Squad {
   localRatio: number; // friends ÷ enemies near the squad (Infinity = none near), refreshed each scan
   shaken: boolean; // outnumbered and pinned: barely fires, easier to hit, can be overrun
   op: Vec | null; // this squad's outpost
+  opRevealUntil: number; // spawn noise reveals the OP until this sim time
   opTimer: number; // seconds stationary near marker & out of combat
   lastCentroid: Vec | null;
   fallback: Vec | null; // where a FALLBACK squad is retreating to
@@ -73,6 +75,7 @@ export interface Garrison {
   side: Side;
   pos: Vec;
   hp: number;
+  revealUntil: number; // sim time until which enemies can see it (spawn noise)
   state: GarrisonState;
   disabled: boolean; // enemy within GARRISON_DISABLE_R
   threatTimer: number; // seconds of continuous enemy presence
@@ -171,6 +174,7 @@ export function createSquad(state: GameState, side: Side, kind: SquadKind, label
     localRatio: Infinity,
     shaken: false,
     op: null,
+    opRevealUntil: 0,
     opTimer: 0,
     lastCentroid: null,
     fallback: null,
@@ -202,6 +206,7 @@ export function createSquad(state: GameState, side: Side, kind: SquadKind, label
       moving: false,
       digTimer: 0,
       dugIn: null,
+      firedAt: -999,
       shells: kind === 'artillery' ? CONFIG.ARTY_SHELLS : 0,
     };
     state.dots.push(dot);
@@ -271,7 +276,7 @@ export function emptyVisible(side: Side): VisibleState {
 }
 
 export function createGarrison(state: GameState, side: Side, pos: Vec): Garrison {
-  const g: Garrison = { id: state.garrisons.length, side, pos: v(pos.x, pos.y), hp: CONFIG.GARRISON_HP, state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null };
+  const g: Garrison = { id: state.garrisons.length, side, pos: v(pos.x, pos.y), hp: CONFIG.GARRISON_HP, revealUntil: 0, state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null };
   state.garrisons.push(g);
   return g;
 }

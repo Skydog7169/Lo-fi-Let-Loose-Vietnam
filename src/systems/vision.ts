@@ -29,6 +29,12 @@ function seenBy(state: GameState, side: Side, p: Vec, inCover: boolean, ownDots:
   return false;
 }
 
+function enemyNear(p: Vec, dots: Dot[], r: number): boolean {
+  const r2 = r * r;
+  for (const d of dots) if (dist2(d.pos, p) <= r2) return true;
+  return false;
+}
+
 export function updateVision(state: GameState, dt: number): void {
   const nDots = state.dots.length, nGar = state.garrisons.length, nSq = state.squads.length;
   for (const side of ['US', 'PAVN'] as Side[]) {
@@ -59,7 +65,8 @@ export function updateVision(state: GameState, dt: number): void {
         continue;
       }
       const cover = isCoverAt(state.grid, d.pos);
-      if (seenBy(state, side, d.pos, cover, ownDots, radii)) { dotVisible[d.id] = 1; vs.enemyDots.push(d); }
+      const firing = state.time - d.firedAt < CONFIG.FIRE_REVEAL_S && enemyNear(d.pos, ownDots, CONFIG.FIRE_REVEAL_R);
+      if (firing || seenBy(state, side, d.pos, cover, ownDots, radii)) { dotVisible[d.id] = 1; vs.enemyDots.push(d); }
       else if (prevDot[d.id]) {
         vs.ghosts.push({ pos: v(d.pos.x, d.pos.y), side: enemy, t: CONFIG.GHOST_SECONDS, kind: isVehicle(state.squads[d.squadId]!.kind) ? 'tank' : 'dot' });
       }
@@ -67,12 +74,12 @@ export function updateVision(state: GameState, dt: number): void {
     vs.enemyGarrisons = [];
     for (const g of state.garrisons) {
       if (g.side !== enemy || g.state === 'destroyed') continue;
-      if (seenBy(state, side, g.pos, isCoverAt(state.grid, g.pos), ownDots, radii)) { garrisonVisible[g.id] = 1; vs.enemyGarrisons.push(g); }
+      if (g.revealUntil > state.time || g.disabled || seenBy(state, side, g.pos, isCoverAt(state.grid, g.pos), ownDots, radii)) { garrisonVisible[g.id] = 1; vs.enemyGarrisons.push(g); }
     }
     vs.enemyOps = [];
     for (const sq of state.squads) {
       if (sq.side !== enemy || !sq.op) continue;
-      if (seenBy(state, side, sq.op, isCoverAt(state.grid, sq.op), ownDots, radii)) { opVisible[sq.id] = 1; vs.enemyOps.push({ squadId: sq.id, pos: sq.op }); }
+      if (sq.opRevealUntil > state.time || seenBy(state, side, sq.op, isCoverAt(state.grid, sq.op), ownDots, radii)) { opVisible[sq.id] = 1; vs.enemyOps.push({ squadId: sq.id, pos: sq.op }); }
     }
     vs.dotVisible = dotVisible;
     vs.garrisonVisible = garrisonVisible;

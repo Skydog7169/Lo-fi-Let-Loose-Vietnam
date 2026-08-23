@@ -4,6 +4,7 @@ import { CONFIG } from '../config';
 import type { MapData, Shape } from '../map/an_cuong';
 import { inOwnTerritory, sectorLineX, type Dot, type GameState, type Garrison, type Side, type Squad } from '../state';
 import { isCoverAt } from '../map/grid';
+import { spawnLocked } from '../systems/spawning';
 import { garrisonPlacementError } from '../commander';
 import type { UiState } from '../ui/input';
 import { dist, fromAngle, v, type Vec } from '../vec';
@@ -265,7 +266,7 @@ function visibleDot(state: GameState, ui: UiState, d: Dot): boolean {
   return vis.length > d.id && vis[d.id] === 1;
 }
 
-function drawGarrison(ctx: CanvasRenderingContext2D, g: Garrison, time: number, zoom: number): void {
+function drawGarrison(ctx: CanvasRenderingContext2D, g: Garrison, time: number, zoom: number, locked = false): void {
   const col = sideColor(g.side);
   const s = 1 / Math.sqrt(zoom);
   const w = 12 * s, h = 9 * s;
@@ -279,6 +280,7 @@ function drawGarrison(ctx: CanvasRenderingContext2D, g: Garrison, time: number, 
     ctx.globalAlpha = 1;
   }
   if (g.state === 'packing') ctx.setLineDash([3 * s, 3 * s]);
+  if (locked) ctx.globalAlpha *= 0.55;
   // house glyph: box + roof
   ctx.beginPath();
   ctx.moveTo(-w / 2, h / 2); ctx.lineTo(-w / 2, -h / 4); ctx.lineTo(0, -h); ctx.lineTo(w / 2, -h / 4); ctx.lineTo(w / 2, h / 2); ctx.closePath();
@@ -296,6 +298,9 @@ function drawGarrison(ctx: CanvasRenderingContext2D, g: Garrison, time: number, 
   } else if (g.disabled) {
     ctx.fillStyle = C.alarm; ctx.font = `bold ${8 * s}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.fillText(`${Math.max(0, CONFIG.GARRISON_DESTROY_SECONDS - g.threatTimer).toFixed(0)}`, 0, h / 2 + 2 * s);
+  } else if (locked) {
+    ctx.fillStyle = '#fff'; ctx.font = `${7 * s}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('LOCKED', 0, h / 2 + 2 * s);
   }
   ctx.restore();
 }
@@ -339,6 +344,9 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
     if (i === state.active) {
       const pulse = 0.6 + 0.4 * Math.sin(state.time * 4);
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5 * pulse; ctx.beginPath(); ctx.arc(pm.pos.x, pm.pos.y, CONFIG.POINT_RADIUS + 4, 0, Math.PI * 2); ctx.stroke();
+      // spawn-lock ring: no garrison/OP spawns inside
+      ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1; ctx.setLineDash([2, 6]);
+      ctx.beginPath(); ctx.arc(pm.pos.x, pm.pos.y, CONFIG.ACTIVE_POINT_SPAWN_LOCK_R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
       if (ps.progress > 0) {
         ctx.strokeStyle = C.us; ctx.lineWidth = 5; ctx.lineCap = 'butt';
         ctx.beginPath(); ctx.arc(pm.pos.x, pm.pos.y, CONFIG.POINT_RADIUS + 4, -Math.PI / 2, -Math.PI / 2 + ps.progress * Math.PI * 2); ctx.stroke();
@@ -367,7 +375,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
   for (const g of state.garrisons) {
     if (g.state === 'destroyed') continue;
     if (g.side !== me && !ui.revealAll && !(vis.garrisonVisible.length > g.id && vis.garrisonVisible[g.id])) continue;
-    drawGarrison(ctx, g, state.time, cam.zoom);
+    drawGarrison(ctx, g, state.time, cam.zoom, spawnLocked(state, g.pos));
   }
   // OPs
   for (const sq of state.squads) {
@@ -517,7 +525,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
     const err = garrisonPlacementError(state, me, p, { forRedeploy: ui.mode.kind === 'redeploy' });
     const ok = !err;
     ctx.globalAlpha = 0.85;
-    drawGarrison(ctx, { id: -1, side: me, pos: p, hp: CONFIG.GARRISON_HP, state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null }, state.time, cam.zoom);
+    drawGarrison(ctx, { id: -1, side: me, pos: p, hp: CONFIG.GARRISON_HP, revealUntil: 0, state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null }, state.time, cam.zoom);
     ctx.globalAlpha = 1;
     ctx.strokeStyle = ok ? '#8f8' : '#f66'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.arc(p.x, p.y, CONFIG.GARRISON_DISABLE_R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);

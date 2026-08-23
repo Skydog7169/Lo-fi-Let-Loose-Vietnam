@@ -112,7 +112,7 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
       const placed: Vec[] = [];
       for (const ideal of ideals) {
         // pretend the previously chosen spots are garrisons so we spread out
-        const fakeVs: VisibleState = { ...vs, own: { ...vs.own, garrisons: [...vs.own.garrisons, ...placed.map((p, i) => ({ id: -1 - i, side, pos: p, hp: 1, state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null }) as Garrison)] } };
+        const fakeVs: VisibleState = { ...vs, own: { ...vs.own, garrisons: [...vs.own.garrisons, ...placed.map((p, i) => ({ id: -1 - i, side, pos: p, hp: 1, revealUntil: 0, state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null }) as Garrison)] } };
         const spot = garrisonSpotNear(fakeVs, ideal);
         if (spot) { cmd.placeGarrison(spot); placed.push(spot); }
       }

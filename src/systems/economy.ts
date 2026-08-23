@@ -7,7 +7,7 @@ export function incomePerMinute(state: GameState, side: Side): Resources {
   return {
     wb: CONFIG.WB_BASE + CONFIG.WB_PER_POINT * n,
     mun: CONFIG.MUN_BASE + CONFIG.MUN_PER_POINT * n,
-    man: CONFIG.MAN_BASE + CONFIG.MAN_PER_POINT * n,
+    man: (CONFIG.MAN_BASE + CONFIG.MAN_PER_POINT * n) * (side === 'US' ? CONFIG.ATTACKER_MANPOWER_MULT : 1),
     fuel: CONFIG.FUEL_BASE + CONFIG.FUEL_PER_POINT * n,
   };
 }
