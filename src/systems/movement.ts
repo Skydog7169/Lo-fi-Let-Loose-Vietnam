@@ -335,14 +335,16 @@ export function updateMovement(state: GameState, dt: number): void {
         moveBlocked(g, dot, v(dot.pos.x + dir.x * Math.min(dE - r, sp * dt), dot.pos.y + dir.y * Math.min(dE - r, sp * dt)), vehicle);
         continue;
       }
-      if (dot.wp >= squad.path.length) continue;
-      const isLast = dot.wp === squad.path.length - 1;
-      const wpPos = squad.path[dot.wp]!;
+      const onDetour = !!dot.detour && dot.detour.length > 0;
+      // A detour (respawn rejoin, or a dot squeezed off a bridge) must run even when the squad's own path is finished.
+      if (!onDetour && dot.wp >= squad.path.length) continue;
+      const isLast = dot.wp >= squad.path.length - 1;
+      const wpPos = squad.path[Math.min(dot.wp, squad.path.length - 1)] ?? dot.pos;
       let target: Vec;
       let arriveR: number;
-      if (dot.detour && dot.detour.length) {
+      if (onDetour) {
         // personal detour back onto the squad path
-        target = dot.detour[0]!;
+        target = dot.detour![0]!;
         arriveR = CONFIG.WAYPOINT_ARRIVE_R;
       } else {
         dot.detour = null;
