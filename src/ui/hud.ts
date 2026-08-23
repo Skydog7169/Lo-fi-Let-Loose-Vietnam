@@ -1,34 +1,133 @@
-// Phase 1 HUD: a small debug strip. Top bar / capture strip / resources come in Phase 3.
+// HUD: top bar = timer, capture strip (lock chain), resource readouts with /min;
+// bottom strip = controls + debug squad states; overlays for setup and end.
 import { CONFIG } from '../config';
-import type { GameState } from '../state';
+import type { GameState, Side } from '../state';
+import { incomePerMinute } from '../systems/economy';
+import { fmtTime } from '../systems/match';
+import { dotsOnActivePoint } from '../systems/capture';
+import { ownedGarrisons, spawnPointFor } from '../systems/spawning';
 import type { UiState } from './input';
+import { sideColor } from '../render/draw';
+
+const C = CONFIG.COLORS;
+export const TOP_BAR_H = 40;
+
+function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color: string = C.hudText, font: string = '12px monospace', align: CanvasTextAlign = 'left'): void {
+  ctx.fillStyle = color; ctx.font = font; ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.fillText(s, x, y);
+}
+
+function drawTopBar(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState): void {
+  const W = CONFIG.LOGICAL_W;
+  ctx.fillStyle = C.hudBg; ctx.fillRect(0, 0, W, TOP_BAR_H);
+  const me = ui.player;
+
+  // timer (centre)
+  const timerCol = state.timer < 60 ? C.alarm : C.hudText;
+  text(ctx, fmtTime(state.timer), W / 2, 14, timerCol, 'bold 18px monospace', 'center');
+  text(ctx, state.phase === 'setup' ? 'SETUP' : state.phase === 'ended' ? 'ENDED' : 'OFFENSIVE', W / 2, 31, C.hudDim, '9px monospace', 'center');
+
+  // capture strip: 5 boxes left of centre
+  const bw = 34, bh = 22, gap = 4;
+  const x0 = W / 2 - 90 - (bw + gap) * state.points.length;
+  for (let i = 0; i < state.points.length; i++) {
+    const ps = state.points[i]!;
+    const x = x0 + i * (bw + gap), y = 9;
+    ctx.fillStyle = ps.owner === 'US' ? C.us : C.pavn; ctx.globalAlpha = i === state.active ? 1 : 0.55; ctx.fillRect(x, y, bw, bh); ctx.globalAlpha = 1;
+    if (i === state.active) {
+      // progress fill
+      ctx.fillStyle = C.us; ctx.fillRect(x, y, bw * ps.progress, bh);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x - 1, y - 1, bw + 2, bh + 2);
+    } else {
+      // lock glyph for points behind the front / not yet reachable
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
+      ctx.strokeRect(x + bw - 9, y + 4, 5, 5); ctx.beginPath(); ctx.arc(x + bw - 6.5, y + 4, 2, Math.PI, 0); ctx.stroke();
+    }
+    text(ctx, String(ps.id), x + 6, y + bh / 2, '#fff', 'bold 12px monospace');
+    // chain link
+    if (i < state.points.length - 1) { ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.moveTo(x + bw, y + bh / 2); ctx.lineTo(x + bw + gap, y + bh / 2); ctx.stroke(); }
+  }
+  if (state.active < state.points.length) {
+    const us = dotsOnActivePoint(state, 'US'), pv = dotsOnActivePoint(state, 'PAVN');
+    text(ctx, `${state.map.points[state.active]!.name}  ${us}v${pv}`, x0, 36, C.hudDim, '9px monospace');
+  }
+
+  // resources, right side
+  const r = state.res[me], inc = incomePerMinute(state, me);
+  const cols: [string, number, number, string][] = [
+    ['WB', r.wb, inc.wb, '#f2d27a'], ['MUN', r.mun, inc.mun, '#f08a5d'], ['MAN', r.man, inc.man, '#8fd18f'], ['FUEL', r.fuel, inc.fuel, '#7ec8e3'],
+  ];
+  let x = W - 12;
+  for (let i = cols.length - 1; i >= 0; i--) {
+    const [name, val, per, col] = cols[i]!;
+    text(ctx, `${Math.floor(val)}`, x, 14, col, 'bold 14px monospace', 'right');
+    text(ctx, `${name} +${per}/min`, x, 30, C.hudDim, '9px monospace', 'right');
+    x -= 92;
+  }
+  // spawn status, left
+  const gar = ownedGarrisons(state, me);
+  text(ctx, `${me}  garrisons ${gar.length}${gar.some((g) => g.disabled) ? ' ⚠' : ''}   wave ${Math.ceil(state.waveTimer[me])}s`, 12, 14, sideColor(me), 'bold 12px monospace');
+  const ops = state.squads.filter((s) => s.side === me && s.op).length;
+  text(ctx, `OPs ${ops}   sector x=${Math.round(state.active >= state.points.length ? W : 0) || ''}${Math.round(sectorX(state))}`, 12, 30, C.hudDim, '9px monospace');
+}
+
+function sectorX(state: GameState): number {
+  const pts = state.map.points;
+  if (state.active >= pts.length) return state.map.width;
+  const cur = pts[state.active]!.pos.x;
+  const prev = state.active > 0 ? pts[state.active - 1]!.pos.x : 90;
+  return (prev + cur) / 2;
+}
+
+function drawBottom(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState, fps: number): void {
+  const W = CONFIG.LOGICAL_W, H = CONFIG.LOGICAL_H;
+  ctx.fillStyle = C.hudBg; ctx.fillRect(0, H - 22, W, 22);
+  const modeTxt = ui.mode.kind === 'placeGarrison' ? '  [PLACING GARRISON — click to place, right-click/Esc cancel]' : ui.mode.kind === 'redeploy' ? '  [REDEPLOY — click new spot, Esc cancel]' : '';
+  text(ctx, `tick ${state.tick}  fps ${fps.toFixed(0)}  zoom ${ui.cam.zoom.toFixed(2)}${ui.revealAll ? '  [REVEAL ALL]' : ''}${modeTxt}`, 8, H - 11, C.hudDim, '10px monospace');
+  text(ctx, 'drag flag: attack  right-drag: defend  click garrison: redeploy  G: new garrison  F: reveal  P: paths  R: cam', W - 8, H - 11, C.hudDim, '10px monospace', 'right');
+
+  // squad roster (debug strip, left) — Phase 4 replaces with chips
+  let y = TOP_BAR_H + 12;
+  for (const sq of state.squads) {
+    if (sq.side !== ui.player && !ui.revealAll) continue;
+    const alive = sq.dotIds.filter((id) => state.dots[id]!.alive).length;
+    const sp = spawnPointFor(state, sq);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(6, y - 7, 210, 13);
+    text(ctx, `${sq.side} ${sq.label} ${sq.kind.padEnd(9)} ${alive}/${sq.dotIds.length} ${sq.state.padEnd(10)} ${sp.kind}`, 10, y, sideColor(sq.side), '10px monospace');
+    y += 13;
+  }
+}
+
+function drawOverlay(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState): void {
+  const W = CONFIG.LOGICAL_W;
+  if (state.phase === 'setup') {
+    const placed = ownedGarrisons(state, ui.player).length;
+    ctx.fillStyle = C.hudBg; ctx.fillRect(W / 2 - 260, TOP_BAR_H + 8, 520, 44);
+    text(ctx, `SETUP  ${fmtTime(state.setupTimer)} — place ${CONFIG.GARRISONS_AT_START} garrisons in your territory (${placed}/${CONFIG.GARRISONS_AT_START})`, W / 2, TOP_BAR_H + 22, C.hudText, 'bold 13px monospace', 'center');
+    text(ctx, ui.mode.kind === 'placeGarrison' ? 'click to place · ≥100px from points · right-click cancels' : 'press G to place · Enter when ready', W / 2, TOP_BAR_H + 40, C.hudDim, '10px monospace', 'center');
+  } else if (state.phase === 'ended' && state.result) {
+    const H = CONFIG.LOGICAL_H;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = C.hudBg; ctx.fillRect(W / 2 - 240, H / 2 - 90, 480, 180);
+    const w = state.result.winner;
+    text(ctx, `${w} ${w === ui.player ? 'VICTORY' : 'WINS'}`, W / 2, H / 2 - 60, sideColor(w), 'bold 26px monospace', 'center');
+    text(ctx, state.result.reason.toUpperCase(), W / 2, H / 2 - 32, C.hudText, '12px monospace', 'center');
+    const sides: Side[] = ['US', 'PAVN'];
+    let y = H / 2 - 4;
+    text(ctx, 'side    points·min  casualties  garrisons lost', W / 2, y, C.hudDim, '11px monospace', 'center'); y += 18;
+    for (const s of sides) {
+      const st = state.stats[s];
+      text(ctx, `${s.padEnd(6)}  ${(st.pointHeldTime / 60).toFixed(1).padStart(9)}  ${String(st.casualties).padStart(10)}  ${String(st.garrisonsLost).padStart(14)}`, W / 2, y, sideColor(s), '11px monospace', 'center');
+      y += 18;
+    }
+    text(ctx, 'reload to play again', W / 2, H / 2 + 70, C.hudDim, '10px monospace', 'center');
+  }
+}
 
 export function drawHud(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState, fps: number): void {
   ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(0, CONFIG.LOGICAL_H - 22, CONFIG.LOGICAL_W, 22);
-  ctx.fillStyle = '#ddd';
-  ctx.font = '11px monospace';
-  ctx.textBaseline = 'middle';
-  ctx.textAlign = 'left';
-  const t = state.time;
-  const mm = Math.floor(t / 60), ss = Math.floor(t % 60);
-  ctx.fillText(
-    `TACMAP  ${mm}:${String(ss).padStart(2, '0')}  tick ${state.tick}  fps ${fps.toFixed(0)}  zoom ${ui.cam.zoom.toFixed(2)}`,
-    8, CONFIG.LOGICAL_H - 11,
-  );
-  // squad states (debug strip, top-left)
-  ctx.textAlign = 'left';
-  let y = 8;
-  for (const sq of state.squads) {
-    const alive = sq.dotIds.filter((id) => state.dots[id]!.alive).length;
-    let supp = 0; for (const id of sq.dotIds) supp += state.dots[id]!.suppression;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(6, y - 6, 190, 13);
-    ctx.fillStyle = sq.side === 'US' ? CONFIG.COLORS.us : CONFIG.COLORS.pavn;
-    ctx.fillText(`${sq.side} ${sq.label} ${sq.kind.padEnd(9)} ${alive}/${sq.dotIds.length} ${sq.state.padEnd(10)} s${(supp / Math.max(1, alive)).toFixed(2)}`, 10, y);
-    y += 13;
-  }
-  ctx.textAlign = 'right';
-  ctx.fillText('drag flag: attack   right-drag flag: defend   drag map: pan   wheel: zoom   P: paths   R: reset cam', CONFIG.LOGICAL_W - 8, CONFIG.LOGICAL_H - 11);
+  drawTopBar(ctx, state, ui);
+  drawBottom(ctx, state, ui, fps);
+  drawOverlay(ctx, state, ui);
   ctx.restore();
 }

@@ -15,7 +15,9 @@ const ctx = canvas.getContext('2d')!;
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed') ?? 1);
 const scenario = params.get('scenario') ?? CONFIG.SCENARIO;
+if (params.get('setup') === '0') (CONFIG as { SKIP_SETUP: boolean }).SKIP_SETUP = true;
 let state = createInitialState(seed, scenario);
+if (CONFIG.SKIP_SETUP && state.phase === 'setup') state.phase = 'play';
 const ui = createUiState();
 const commanders: Record<Side, ReturnType<typeof makeCommander>> = {
   US: makeCommander(() => state, 'US'),

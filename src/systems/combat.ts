@@ -39,6 +39,7 @@ export function isFlanking(shooter: Dot, target: Dot): boolean {
 
 function killDot(state: GameState, d: Dot): void {
   d.alive = false;
+  state.stats[d.side].casualties++;
   d.hp = 0;
   d.targetId = -1;
   d.coverSeek = null;
@@ -67,7 +68,7 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
   const jitter = landed ? 0 : 6;
   const end = v(target.pos.x + (rand(state.rng) - 0.5) * 2 * jitter, target.pos.y + (rand(state.rng) - 0.5) * 2 * jitter);
   pushEffect(state, { kind: 'tracer', a: v(shooter.pos.x, shooter.pos.y), b: end, side: shooter.side, ttl: CONFIG.TRACER_TTL, max: CONFIG.TRACER_TTL });
-  pushEffect(state, { kind: 'flash', pos: v(shooter.pos.x, shooter.pos.y), ttl: CONFIG.FLASH_TTL, max: CONFIG.FLASH_TTL });
+  pushEffect(state, { kind: 'flash', pos: v(shooter.pos.x, shooter.pos.y), side: shooter.side, ttl: CONFIG.FLASH_TTL, max: CONFIG.FLASH_TTL });
 }
 
 // ---- artillery ----
@@ -84,7 +85,7 @@ function fireBattery(state: GameState, squad: Squad, gun: Dot): void {
   const to = v(squad.marker.pos.x + Math.cos(ang) * rad, squad.marker.pos.y + Math.sin(ang) * rad);
   state.shells.push({ to, t: CONFIG.ARTY_FLIGHT_TIME, side: squad.side });
   pushEffect(state, { kind: 'shell', from: v(gun.pos.x, gun.pos.y), to, ttl: CONFIG.ARTY_FLIGHT_TIME, max: CONFIG.ARTY_FLIGHT_TIME });
-  pushEffect(state, { kind: 'flash', pos: v(gun.pos.x, gun.pos.y), ttl: CONFIG.FLASH_TTL * 2, max: CONFIG.FLASH_TTL * 2 });
+  pushEffect(state, { kind: 'flash', pos: v(gun.pos.x, gun.pos.y), side: squad.side, ttl: CONFIG.FLASH_TTL * 2, max: CONFIG.FLASH_TTL * 2 });
 }
 
 export function shellImpact(state: GameState, p: Vec): void {

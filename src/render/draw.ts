@@ -2,7 +2,8 @@
 // The static map layer is rendered once to an offscreen canvas at 2× and blitted.
 import { CONFIG } from '../config';
 import type { MapData, Shape } from '../map/an_cuong';
-import type { Dot, GameState, Side, Squad } from '../state';
+import { sectorLineX, type Dot, type GameState, type Garrison, type Side, type Squad } from '../state';
+import { garrisonPlacementError } from '../commander';
 import type { UiState } from '../ui/input';
 import { fromAngle, type Vec } from '../vec';
 
@@ -150,11 +151,11 @@ function drawChevronFlag(ctx: CanvasRenderingContext2D, pos: Vec, color: string,
   ctx.restore();
 }
 
-function drawSquad(ctx: CanvasRenderingContext2D, state: GameState, sq: Squad): void {
+function drawSquad(ctx: CanvasRenderingContext2D, state: GameState, sq: Squad, ui: UiState): void {
   const col = sideColor(sq.side);
   for (let i = 0; i < sq.dotIds.length; i++) {
     const d = state.dots[sq.dotIds[i]!]!;
-    if (!d.alive) continue;
+    if (!d.alive || !visibleDot(state, ui, d)) continue;
     if (sq.kind === 'tank') { drawTank(ctx, d, col); continue; }
     if (sq.kind === 'artillery') { drawBattery(ctx, d, col); continue; }
     ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS, 0, Math.PI * 2);
@@ -201,9 +202,15 @@ function drawBattery(ctx: CanvasRenderingContext2D, d: Dot, col: string): void {
   ctx.fillText(`${d.shells}`, d.pos.x, d.pos.y + 7);
 }
 
-function drawEffects(ctx: CanvasRenderingContext2D, state: GameState): void {
+function drawEffects(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState): void {
   for (const e of state.effects) {
     const a = Math.max(0, e.ttl / e.max);
+    // enemy muzzle flashes only show when the shooter is visible; their tracers always show (the 'contact!' tell)
+    if (e.kind === 'flash' && e.side !== ui.player && !ui.revealAll) {
+      let seen = false;
+      for (const d of state.vis[ui.player].enemyDots) if (Math.abs(d.pos.x - e.pos.x) < 4 && Math.abs(d.pos.y - e.pos.y) < 4) { seen = true; break; }
+      if (!seen) continue;
+    }
     switch (e.kind) {
       case 'tracer':
         ctx.globalAlpha = a;
@@ -243,14 +250,96 @@ function drawEffects(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.globalAlpha = 1;
 }
 
+function visibleDot(state: GameState, ui: UiState, d: Dot): boolean {
+  if (ui.revealAll || d.side === ui.player) return true;
+  const vis = state.vis[ui.player].dotVisible;
+  return vis.length > d.id && vis[d.id] === 1;
+}
+
+function drawGarrison(ctx: CanvasRenderingContext2D, g: Garrison, time: number, zoom: number): void {
+  const col = sideColor(g.side);
+  const s = 1 / Math.sqrt(zoom);
+  const w = 12 * s, h = 9 * s;
+  ctx.save();
+  ctx.translate(g.pos.x, g.pos.y);
+  // alarm pulse ring when disabled / under attack
+  if (g.disabled) {
+    const pulse = 0.5 + 0.5 * Math.sin(time * 10);
+    ctx.strokeStyle = C.alarm; ctx.lineWidth = 2 * s; ctx.globalAlpha = 0.35 + 0.65 * pulse;
+    ctx.beginPath(); ctx.arc(0, 0, CONFIG.GARRISON_DISABLE_R, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  if (g.state === 'packing') ctx.setLineDash([3 * s, 3 * s]);
+  // house glyph: box + roof
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, h / 2); ctx.lineTo(-w / 2, -h / 4); ctx.lineTo(0, -h); ctx.lineTo(w / 2, -h / 4); ctx.lineTo(w / 2, h / 2); ctx.closePath();
+  ctx.fillStyle = g.state === 'packing' ? 'rgba(0,0,0,0.25)' : col; ctx.fill();
+  ctx.strokeStyle = C.garrison; ctx.lineWidth = 1.5 * s; ctx.stroke();
+  ctx.setLineDash([]);
+  if (g.state === 'packing') {
+    ctx.fillStyle = '#fff'; ctx.font = `bold ${8 * s}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(`${Math.ceil(g.packTimer)}s`, 0, h / 2 + 2 * s);
+    if (g.packTarget) {
+      ctx.restore(); ctx.save();
+      ctx.strokeStyle = col; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(g.pos.x, g.pos.y); ctx.lineTo(g.packTarget.x, g.packTarget.y); ctx.stroke(); ctx.setLineDash([]);
+    }
+  } else if (g.disabled) {
+    ctx.fillStyle = C.alarm; ctx.font = `bold ${8 * s}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(`${Math.max(0, CONFIG.GARRISON_DESTROY_SECONDS - g.threatTimer).toFixed(0)}`, 0, h / 2 + 2 * s);
+  }
+  ctx.restore();
+}
+
+function drawOp(ctx: CanvasRenderingContext2D, pos: Vec, side: Side, label: string, zoom: number): void {
+  const s = 1 / Math.sqrt(zoom);
+  const r = 6 * s;
+  ctx.save();
+  ctx.translate(pos.x, pos.y);
+  ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(r * 0.9, r * 0.6); ctx.lineTo(-r * 0.9, r * 0.6); ctx.closePath();
+  ctx.fillStyle = sideColor(side); ctx.fill();
+  ctx.strokeStyle = C.opGlyph; ctx.lineWidth = 1 * s; ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = `bold ${7 * s}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(label, 0, r * 0.8);
+  ctx.restore();
+}
+
 export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvasElement, state: GameState, ui: UiState): void {
   const { cam } = ui;
+  const me = ui.player;
+  const vis = state.vis[me];
   ctx.save();
   ctx.scale(cam.zoom, cam.zoom);
   ctx.translate(-cam.x, -cam.y);
 
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(staticLayer, 0, 0, state.map.width, state.map.height);
+
+  // territory: tint the enemy side of the sector line, draw the line
+  const lx = sectorLineX(state);
+  ctx.fillStyle = C.fogEnemy;
+  if (me === 'US') ctx.fillRect(lx, 0, state.map.width - lx, state.map.height); else ctx.fillRect(0, 0, lx, state.map.height);
+  ctx.strokeStyle = C.sectorLine; ctx.lineWidth = 1.5; ctx.setLineDash([8, 6]);
+  ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx, state.map.height); ctx.stroke(); ctx.setLineDash([]);
+
+  // capture points: owner tint, active progress ring with pulse
+  for (let i = 0; i < state.points.length; i++) {
+    const ps = state.points[i]!, pm = state.map.points[i]!;
+    ctx.beginPath(); ctx.arc(pm.pos.x, pm.pos.y, CONFIG.POINT_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = sideDim(ps.owner); ctx.fill();
+    if (i === state.active) {
+      const pulse = 0.6 + 0.4 * Math.sin(state.time * 4);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5 * pulse; ctx.beginPath(); ctx.arc(pm.pos.x, pm.pos.y, CONFIG.POINT_RADIUS + 4, 0, Math.PI * 2); ctx.stroke();
+      if (ps.progress > 0) {
+        ctx.strokeStyle = C.us; ctx.lineWidth = 5; ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.arc(pm.pos.x, pm.pos.y, CONFIG.POINT_RADIUS + 4, -Math.PI / 2, -Math.PI / 2 + ps.progress * Math.PI * 2); ctx.stroke();
+      }
+    } else if (i < state.active) {
+      // locked behind the front
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(pm.pos.x - 5, pm.pos.y + 24); ctx.lineTo(pm.pos.x + 5, pm.pos.y + 24); ctx.stroke();
+    }
+  }
 
   // debug paths
   if (ui.showPaths) {
@@ -265,9 +354,24 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
     ctx.setLineDash([]);
   }
 
-  // markers (defend = outlined, attack = solid)
+  // garrisons (own always; enemy if visible)
+  for (const g of state.garrisons) {
+    if (g.state === 'destroyed') continue;
+    if (g.side !== me && !ui.revealAll && !(vis.garrisonVisible.length > g.id && vis.garrisonVisible[g.id])) continue;
+    drawGarrison(ctx, g, state.time, cam.zoom);
+  }
+  // OPs
+  for (const sq of state.squads) {
+    if (!sq.op) continue;
+    if (sq.side !== me && !ui.revealAll && !(vis.opVisible.length > sq.id && vis.opVisible[sq.id])) continue;
+    drawOp(ctx, sq.op, sq.side, sq.label, cam.zoom);
+  }
+  // HQ spawn marker hint: none (static layer has HQ)
+
+  // markers (own side, or controllable sides)
   for (const sq of state.squads) {
     if (!sq.marker) continue;
+    if (sq.side !== me && !ui.controllable.includes(sq.side) && !ui.revealAll) continue;
     const dragging = ui.drag?.kind === 'marker' && ui.drag.squadId === sq.id;
     const hover = ui.hoverSquadId === sq.id;
     if (dragging) ctx.globalAlpha = 0.35;
@@ -287,8 +391,36 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
     ctx.beginPath(); ctx.moveTo(lead.pos.x, lead.pos.y); ctx.lineTo(ui.drag.pos.x, ui.drag.pos.y); ctx.stroke(); ctx.setLineDash([]);
   }
 
-  for (const sq of state.squads) drawSquad(ctx, state, sq);
-  drawEffects(ctx, state);
+  // ghosts (last known enemy positions)
+  for (const gh of vis.ghosts) {
+    const a = Math.max(0, gh.t / CONFIG.GHOST_SECONDS);
+    ctx.globalAlpha = a * 0.8;
+    ctx.strokeStyle = sideColor(gh.side); ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (gh.kind === 'tank') ctx.rect(gh.pos.x - 7, gh.pos.y - 5, 14, 10); else ctx.arc(gh.pos.x, gh.pos.y, CONFIG.DOT_RADIUS + 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  for (const sq of state.squads) drawSquad(ctx, state, sq, ui);
+  drawEffects(ctx, state, ui);
+
+  // placement preview
+  if (ui.mode.kind !== 'none' && ui.mouseWorld) {
+    const p = ui.mouseWorld;
+    const err = garrisonPlacementError(state, me, p, { forRedeploy: ui.mode.kind === 'redeploy' });
+    const ok = !err;
+    ctx.globalAlpha = 0.85;
+    drawGarrison(ctx, { id: -1, side: me, pos: p, state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null }, state.time, cam.zoom);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = ok ? '#8f8' : '#f66'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, CONFIG.GARRISON_DISABLE_R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    if (err) {
+      ctx.fillStyle = '#f66'; ctx.font = `bold ${9 / Math.sqrt(cam.zoom)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      const msg = { territory: 'OWN TERRITORY ONLY', point: '100px FROM POINTS', terrain: 'BAD GROUND', count: 'ALL PLACED', wb: 'NEED 300 WB', cooldown: 'COOLDOWN', supply: 'NEEDS SUPPLY DROP', phase: '' }[err];
+      ctx.fillText(msg, p.x, p.y - 14 / Math.sqrt(cam.zoom));
+    }
+  }
 
   ctx.restore();
 }

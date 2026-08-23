@@ -1,6 +1,6 @@
 // Headless verification runner: `npm run headless -- <scenario|all> [seeds] [seconds]`
 // Bundled with esbuild and run in Node — no DOM, deterministic.
-import { profilePaths, runMany, runScenario } from '../src/devtools';
+import { profilePaths, runMany, runPhase3Checks, runScenario } from '../src/devtools';
 import { SCENARIOS } from '../src/scenarios';
 
 const [, , what = 'all', seedsArg = '20', secsArg = '150'] = process.argv;
@@ -32,8 +32,12 @@ if (what === 'perf') {
   const r = runScenario('stress', 1, 60, 999);
   const ms = performance.now() - a;
   console.log(`stress: 60s sim in ${ms.toFixed(0)}ms → ${(ms / 3600).toFixed(3)} ms/tick, alive ${r.alive.reduce((s, x) => s + x.alive, 0)}`);
+} else if (what === 'checks') {
+  const res = runPhase3Checks(Number(seedsArg) || 1);
+  for (const c of res) console.log(`${c.pass ? 'PASS' : 'FAIL'}  ${c.name.padEnd(48)} ${c.detail}`);
+  console.log(`${res.filter((c) => c.pass).length}/${res.length} passed`);
 } else if (what === 'all') {
-  for (const sc of Object.keys(SCENARIOS)) if (sc !== 'default' && sc !== 'stress') summarise(sc);
+  for (const sc of Object.keys(SCENARIOS)) if (!['default', 'stress', 'match', 'optouch', 'garrisoncamp', 'hidden', 'win_capture', 'win_timeout', 'win_annihilate'].includes(sc)) summarise(sc);
 } else {
   const r = runScenario(what, seeds[0]!, secs, 10);
   console.log(JSON.stringify(r, null, 1));

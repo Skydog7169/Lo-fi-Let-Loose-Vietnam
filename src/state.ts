@@ -39,7 +39,7 @@ export interface Dot {
 
 export type Effect =
   | { kind: 'tracer'; a: Vec; b: Vec; side: Side; ttl: number; max: number }
-  | { kind: 'flash'; pos: Vec; ttl: number; max: number }
+  | { kind: 'flash'; pos: Vec; side: Side; ttl: number; max: number }
   | { kind: 'shell'; from: Vec; to: Vec; ttl: number; max: number }
   | { kind: 'impact'; pos: Vec; r: number; ttl: number; max: number }
   | { kind: 'death'; pos: Vec; side: Side; ttl: number; max: number };
@@ -54,15 +54,53 @@ export interface Squad {
   path: Vec[]; // smoothed world waypoints toward marker
   pathGoal: Vec | null; // what the path was computed for
   state: SquadState;
+  op: Vec | null; // this squad's outpost
+  opTimer: number; // seconds stationary near marker & out of combat
+  lastCentroid: Vec | null;
   fallback: Vec | null; // where a FALLBACK squad is retreating to
   defendCache: { marker: Vec; spot: Vec } | null; // resolved cover spot for the current defend marker
   scanPhase: number; // offset for target scans (0 = all squads together)
   heading: number; // direction of travel; formation slots rotate with it
 }
 
+export type GarrisonState = 'active' | 'packing' | 'destroyed';
+export interface Garrison {
+  id: number;
+  side: Side;
+  pos: Vec;
+  state: GarrisonState;
+  disabled: boolean; // enemy within GARRISON_DISABLE_R
+  threatTimer: number; // seconds of continuous enemy presence
+  packTimer: number; // seconds left while packing
+  packTarget: Vec | null; // where it re-appears after packing
+}
+
+export interface Resources { wb: number; mun: number; man: number; fuel: number }
+
+export interface PointState { id: number; owner: Side; progress: number } // progress = attacker (US) capture 0..1
+
+export type MatchPhase = 'setup' | 'play' | 'ended';
+
+export interface Ghost { pos: Vec; side: Side; t: number; kind: 'dot' | 'tank' }
+
+/** What one commander is allowed to know. Both the human UI and the scripted AI read only this. */
+export interface VisibleState {
+  side: Side;
+  enemyDots: Dot[]; // visible enemy dots (live references; do not mutate)
+  enemyGarrisons: Garrison[];
+  enemyOps: { squadId: number; pos: Vec }[];
+  ghosts: Ghost[];
+  dotVisible: Uint8Array; // indexed by dot id
+  garrisonVisible: Uint8Array; // indexed by garrison id
+  opVisible: Uint8Array; // indexed by squad id
+}
+
 // ---- Commands: the ONLY way a commander (human or AI) mutates the sim ----
 export type Command =
-  | { type: 'marker'; side: Side; squadId: number; kind: MarkerKind; pos: Vec };
+  | { type: 'marker'; side: Side; squadId: number; kind: MarkerKind; pos: Vec }
+  | { type: 'placeGarrison'; side: Side; pos: Vec }
+  | { type: 'redeployGarrison'; side: Side; garrisonId: number; pos: Vec }
+  | { type: 'setupDone'; side: Side };
 
 export interface GameState {
   seed: number;
@@ -77,6 +115,20 @@ export interface GameState {
   effects: Effect[];
   shells: { to: Vec; t: number; side: Side }[]; // artillery rounds in flight
   scenario: string;
+  // ---- match ----
+  phase: MatchPhase;
+  setupTimer: number;
+  setupDone: Record<Side, boolean>;
+  timer: number; // seconds remaining
+  result: { winner: Side; reason: string } | null;
+  points: PointState[];
+  active: number; // index into points of the contested point (or points.length when all taken)
+  garrisons: Garrison[];
+  res: Record<Side, Resources>;
+  waveTimer: Record<Side, number>;
+  vis: Record<Side, VisibleState>;
+  stats: Record<Side, { casualties: number; garrisonsLost: number; pointHeldTime: number }>;
+  rules: { income: boolean; respawn: boolean }; // scenario overrides for pure combat tests
 }
 
 let nextSquadId = 0;
@@ -93,6 +145,9 @@ export function createSquad(state: GameState, side: Side, kind: SquadKind, label
     path: [],
     pathGoal: null,
     state: 'IDLE',
+    op: null,
+    opTimer: 0,
+    lastCentroid: null,
     fallback: null,
     defendCache: null,
     scanPhase: 0, // all squads scan on the same ticks — staggering gave one side first acquisition
@@ -155,8 +210,59 @@ export function createEmptyState(seed: number, scenario: string): GameState {
     effects: [],
     shells: [],
     scenario,
+    phase: 'setup',
+    setupTimer: CONFIG.SETUP_SECONDS,
+    setupDone: { US: false, PAVN: false },
+    timer: CONFIG.MATCH_SECONDS,
+    result: null,
+    points: map.points.map((p) => ({ id: p.id, owner: 'PAVN' as Side, progress: 0 })),
+    active: 0,
+    garrisons: [],
+    res: {
+      US: { wb: CONFIG.START_WB, mun: CONFIG.START_MUN, man: CONFIG.START_MAN, fuel: CONFIG.START_FUEL },
+      PAVN: { wb: CONFIG.START_WB, mun: CONFIG.START_MUN, man: CONFIG.START_MAN, fuel: CONFIG.START_FUEL },
+    },
+    waveTimer: { US: CONFIG.WAVE_SECONDS, PAVN: CONFIG.WAVE_SECONDS },
+    vis: { US: emptyVisible('US'), PAVN: emptyVisible('PAVN') },
+    stats: { US: { casualties: 0, garrisonsLost: 0, pointHeldTime: 0 }, PAVN: { casualties: 0, garrisonsLost: 0, pointHeldTime: 0 } },
+    rules: { income: true, respawn: true },
   };
   return state;
+}
+
+export function emptyVisible(side: Side): VisibleState {
+  return { side, enemyDots: [], enemyGarrisons: [], enemyOps: [], ghosts: [], dotVisible: new Uint8Array(0), garrisonVisible: new Uint8Array(0), opVisible: new Uint8Array(0) };
+}
+
+export function createGarrison(state: GameState, side: Side, pos: Vec): Garrison {
+  const g: Garrison = { id: state.garrisons.length, side, pos: v(pos.x, pos.y), state: 'active', disabled: false, threatTimer: 0, packTimer: 0, packTarget: null };
+  state.garrisons.push(g);
+  return g;
+}
+
+/** x of the sector line for the current active point: midway between the last point taken and the active one. */
+export function sectorLineX(state: GameState): number {
+  const pts = state.map.points;
+  if (state.active >= pts.length) return state.map.width; // everything is US
+  const cur = pts[state.active]!.pos.x;
+  const prev = state.active > 0 ? pts[state.active - 1]!.pos.x : state.map.hqs.find((h) => h.side === 'US')!.rect.w;
+  return (prev + cur) / 2;
+}
+
+export function inOwnTerritory(state: GameState, side: Side, p: Vec): boolean {
+  const x = sectorLineX(state);
+  return side === 'US' ? p.x < x : p.x >= x;
+}
+
+export function hqCenter(state: GameState, side: Side): Vec {
+  const r = state.map.hqs.find((h) => h.side === side)!.rect;
+  return v(r.x + r.w / 2, r.y + r.h / 2);
+}
+
+export function pointsHeld(state: GameState, side: Side): number {
+  let n = 0;
+  for (const p of state.points) if (p.owner === side) n++;
+  return n;
 }
 
 export const isVehicle = (k: SquadKind): boolean => k === 'tank';

@@ -27,9 +27,11 @@ export function rangeFor(state: GameState, shooter: Dot, target: Dot): number {
   return CONFIG.INF_RANGE;
 }
 
-/** Can the shooter see the target well enough to shoot? (Phase 2: concealment penalty for tanks only;
- *  Phase 3 layers side-level fog of war on top.) */
+/** Can the shooter see the target well enough to shoot? Side-level fog of war (vision.ts) plus the
+ *  tank concealment penalty. */
 export function canSpot(state: GameState, shooter: Dot, target: Dot, d2: number): boolean {
+  const vis = state.vis[shooter.side].dotVisible;
+  if (vis.length > target.id && vis[target.id] !== 1 && !CONFIG.DEBUG_REVEAL_ALL) return false;
   const ss = state.squads[shooter.squadId]!;
   if (ss.kind === 'tank' && isCoverAt(state.grid, target.pos)) return d2 <= CONFIG.TANK_COVER_SPOT_RANGE ** 2;
   return true;

@@ -124,16 +124,64 @@ export const CONFIG = {
   DEATH_TTL: 1.5,
   MAX_EFFECTS: 600,
 
+  // ---- Match (bible §3) ----
+  MATCH_SECONDS: 15 * 60,
+  CAPTURE_BONUS_SECONDS: 3 * 60,
+  SETUP_SECONDS: 60,
+  SKIP_SETUP: false, // overridden by ?setup=0 for quick testing
+
   // ---- Capture points ----
   POINT_RADIUS: 60,
   POINT_COUNT: 5,
+  CAPTURE_SECONDS_PER_DOT: 60, // 1 dot of superiority captures in this long; rate scales with superiority
+  CAPTURE_MAX_SUPERIORITY: 3, // superiority beyond this does not speed capture
+
+  // ---- Spawning (bible §6) ----
+  GARRISONS_AT_START: 3,
+  GARRISON_MIN_POINT_DIST: 100, // px from any capture point
+  GARRISON_DISABLE_R: 50, // enemy dot inside → no spawns
+  GARRISON_DESTROY_SECONDS: 10, // continuous enemy presence → destroyed
+  GARRISON_COST_WB: 300,
+  GARRISON_COOLDOWN: 120,
+  GARRISON_REQUIRES_SUPPLY: true, // Phase 4: needs a supply drop within SUPPLY_RADIUS
+  SUPPLY_RADIUS: 75,
+  REDEPLOY_COST_WB: 75,
+  REDEPLOY_COOLDOWN: 60,
+  REDEPLOY_PACK_SECONDS: 30,
+  OP_DROP_SECONDS: 15, // squad stationary near marker and out of combat this long → OP relocates to squad
+  OP_NEAR_MARKER_R: 80,
+  OP_TOUCH_R: 30, // enemy dot this close deletes the OP
+  OP_SLOW_SPEED: 8, // px/s centroid speed below which a squad counts as stationary
+  WAVE_SECONDS: 20,
+  MANPOWER_PER_SOLDIER: 5,
+  HQ_SPAWN_SPREAD: 30,
+  RESPAWN_REJOIN: true, // respawned dots path back to their squad
+
+  // ---- Economy (bible §7), per minute ----
+  WB_BASE: 10, WB_PER_POINT: 15,
+  MUN_BASE: 50, MUN_PER_POINT: 25,
+  MAN_BASE: 50, MAN_PER_POINT: 25,
+  FUEL_BASE: 50, FUEL_PER_POINT: 25,
+  START_WB: 200, // Phase 4 replaces with unspent draft budget
+  START_MUN: 300,
+  START_MAN: 300,
+  START_FUEL: 150,
+
+  // ---- Vision & fog (bible §5) ----
+  VISION_INTERVAL_TICKS: 3,
+  VISION_INF: 120,
+  VISION_RECON: 200,
+  VISION_TANK: 120,
+  VISION_COVER_MULT: 0.75, // unit vision against targets in cover is reduced to this fraction
+  GHOST_SECONDS: 5,
+  DEBUG_REVEAL_ALL: false, // F toggles
 
   // ---- Placeholder forces (until the Phase 4 draft) ----
   PLACEHOLDER_SQUADS_PER_SIDE: 3,
   SCENARIO: 'default', // overridden by ?scenario= — see scenarios.ts
 
   // ---- Debug ----
-  DEBUG_CONTROL_BOTH_SIDES: true, // Phase 1 only: human can drag either side's markers
+  DEBUG_CONTROL_BOTH_SIDES: false, // dev: let the human drag both sides' markers (turn off — fog would leak)
   DEBUG_DRAW_PATHS: false,
 
   // ---- Palette (lo-fi flat colours) ----
@@ -163,6 +211,15 @@ export const CONFIG = {
     impact: '#ffb347',
     suppressed: '#ffd23c',
     shell: '#333',
+    ghost: 'rgba(255,255,255,0.55)',
+    fogEnemy: 'rgba(0,0,0,0.10)',
+    sectorLine: 'rgba(255,255,255,0.75)',
+    garrison: '#f2e9c8',
+    opGlyph: '#ffffff',
+    alarm: '#ff3b2f',
+    hudBg: 'rgba(10,12,14,0.82)',
+    hudText: '#e8e4d8',
+    hudDim: '#9a968c',
     letterbox: '#0b0d0f',
   },
 } as const;

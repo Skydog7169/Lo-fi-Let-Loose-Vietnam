@@ -1,8 +1,8 @@
 // Camera + pointer handling. Converts screen → logical → world, drags markers
 // through the CommanderInterface, pans/zooms the camera. No sim mutation here.
 import { CONFIG } from '../config';
-import type { CommanderInterface } from '../commander';
-import type { GameState, MarkerKind, Side, Squad } from '../state';
+import { garrisonPlacementError, type CommanderInterface } from '../commander';
+import type { GameState, Garrison, MarkerKind, Side, Squad } from '../state';
 import { clamp, dist, v, type Vec } from '../vec';
 
 export interface Camera { x: number; y: number; zoom: number }
@@ -19,7 +19,11 @@ export interface UiState {
     | { kind: 'marker'; squadId: number; markerKind: MarkerKind; pos: Vec }
     | null;
   showPaths: boolean;
+  revealAll: boolean; // F: debug fog toggle (render only; the sim still enforces fog)
   controllable: Side[];
+  /** Which side the human plays (HUD, fog, placement). */
+  player: Side;
+  mode: { kind: 'none' } | { kind: 'placeGarrison' } | { kind: 'redeploy'; garrisonId: number };
 }
 
 export const MARKER_HIT_R = 14;
@@ -32,7 +36,10 @@ export function createUiState(): UiState {
     hoverSquadId: null,
     drag: null,
     showPaths: CONFIG.DEBUG_DRAW_PATHS,
+    revealAll: CONFIG.DEBUG_REVEAL_ALL,
     controllable: CONFIG.DEBUG_CONTROL_BOTH_SIDES ? ['US', 'PAVN'] : ['US'],
+    player: 'US',
+    mode: { kind: 'none' },
   };
 }
 
@@ -65,6 +72,15 @@ function markerHit(state: GameState, ui: UiState, world: Vec): Squad | null {
   return best;
 }
 
+function garrisonHit(state: GameState, ui: UiState, world: Vec): Garrison | null {
+  const r = MARKER_HIT_R / ui.cam.zoom;
+  for (const g of state.garrisons) {
+    if (g.side !== ui.player || g.state !== 'active') continue;
+    if (dist(g.pos, world) <= r) return g;
+  }
+  return null;
+}
+
 export function attachInput(
   canvas: HTMLCanvasElement,
   state: () => GameState,
@@ -81,6 +97,27 @@ export function attachInput(
   canvas.addEventListener('mousedown', (e) => {
     const s = screenOf(e);
     const w = screenToWorld(ui, s);
+    if (ui.mode.kind !== 'none') {
+      if (e.button === 2) { ui.mode = { kind: 'none' }; return; } // right-click cancels
+      if (e.button !== 0) return;
+      const st = state();
+      if (ui.mode.kind === 'placeGarrison') {
+        if (!garrisonPlacementError(st, ui.player, w)) {
+          commanders[ui.player].placeGarrison(w);
+          const owned = st.garrisons.filter((g) => g.side === ui.player && g.state !== 'destroyed').length + 1;
+          if (st.phase !== 'setup' || owned >= CONFIG.GARRISONS_AT_START) ui.mode = { kind: 'none' };
+        }
+      } else if (ui.mode.kind === 'redeploy') {
+        if (!garrisonPlacementError(st, ui.player, w, { forRedeploy: true })) {
+          commanders[ui.player].redeployGarrison(ui.mode.garrisonId, w);
+          ui.mode = { kind: 'none' };
+        }
+      }
+      return;
+    }
+    // clicking one of our garrisons starts a redeploy
+    const gHit = garrisonHit(state(), ui, w);
+    if (gHit && e.button === 0 && state().phase !== 'ended') { ui.mode = { kind: 'redeploy', garrisonId: gHit.id }; return; }
     const hit = markerHit(state(), ui, w);
     if (hit && (e.button === 0 || e.button === 2)) {
       // left-drag = attack marker, right-drag = defend marker
@@ -138,5 +175,9 @@ export function attachInput(
   window.addEventListener('keydown', (e) => {
     if (e.key === 'p' || e.key === 'P') ui.showPaths = !ui.showPaths;
     if (e.key === 'r' || e.key === 'R') { ui.cam = { x: 0, y: 0, zoom: 1 }; }
+    if (e.key === 'f' || e.key === 'F') ui.revealAll = !ui.revealAll;
+    if (e.key === 'g' || e.key === 'G') ui.mode = ui.mode.kind === 'placeGarrison' ? { kind: 'none' } : { kind: 'placeGarrison' };
+    if (e.key === 'Escape') ui.mode = { kind: 'none' };
+    if (e.key === 'Enter' && state().phase === 'setup') commanders[ui.player].setupDone();
   });
 }

@@ -8,5 +8,8 @@ npm run dev       # http://localhost:5174
 npm run build     # typecheck + production build
 ```
 
-Controls (Phase 1): drag a squad's flag = attack order; right-drag = defend; drag the map = pan; wheel = zoom; `P` = show paths; `R` = reset camera.
-Dev hook: `tacmap.step(n)` in the console advances the sim `n` ticks deterministically.
+Controls: drag a squad's flag = attack order; right-drag = defend; `G` + click = place garrison (setup: 3 free); click own garrison + click = redeploy; Enter = ready (setup); drag map = pan; wheel = zoom; `F` = reveal fog (debug); `P` = paths; `R` = reset camera.
+
+URL params: `?scenario=<name>` (see `src/scenarios.ts`), `?seed=<n>`, `?setup=0` (skip setup, auto-place garrisons).
+
+Dev: `tacmap.step(n)` in the console advances the sim `n` ticks deterministically; `npm run headless -- all|checks|perf|<scenario>` runs the Node verification suite.
