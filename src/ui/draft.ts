@@ -12,10 +12,10 @@ const NOTES: Record<SquadKind, string> = { infantry: 'baseline', at: 'can damage
 export interface DraftUi { comp: Record<SquadKind, number>; done: boolean }
 export const defaultDraft = (): Record<SquadKind, number> => ({ infantry: 4, at: 1, recon: 0, tank: 1, artillery: 0 });
 
-const PX = 300, PY = 150, PW = 600, ROW_H = 44, ROW0 = PY + 90;
+const PX = 300, PY = 150, PW = 600, ROW_H = 44, ROW0 = PY + 90, ROWS = 4;
 function rowRect(i: number) { return { y: ROW0 + i * ROW_H }; }
 const BTN = { minus: PX + 400, plus: PX + 470, w: 26, h: 26 };
-const DEPLOY = { x: PX + PW - 160, y: PY + 90 + 5 * ROW_H + 26, w: 140, h: 34 };
+const DEPLOY = { x: PX + PW - 160, y: PY + 90 + ROWS * ROW_H + 26, w: 140, h: 34 };
 
 export type DraftHit = { kind: 'inc'; unit: SquadKind } | { kind: 'dec'; unit: SquadKind } | { kind: 'deploy' } | null;
 
@@ -36,8 +36,8 @@ export function drawDraft(ctx: CanvasRenderingContext2D, state: GameState, ui: U
   const W = CONFIG.LOGICAL_W, H = CONFIG.LOGICAL_H;
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = C.hudBg; ctx.fillRect(PX, PY, PW, 6 * ROW_H + 150);
-  ctx.strokeStyle = C.cardEdge; ctx.strokeRect(PX + 0.5, PY + 0.5, PW - 1, 6 * ROW_H + 149);
+  ctx.fillStyle = C.hudBg; ctx.fillRect(PX, PY, PW, (ROWS + 1) * ROW_H + 150);
+  ctx.strokeStyle = C.cardEdge; ctx.strokeRect(PX + 0.5, PY + 0.5, PW - 1, (ROWS + 1) * ROW_H + 149);
   ctx.textBaseline = 'middle';
   ctx.fillStyle = C.hudText; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'left';
   ctx.fillText(`DRAFT — ${ui.player} FORCE`, PX + 24, PY + 30);
@@ -45,7 +45,7 @@ export function drawDraft(ctx: CanvasRenderingContext2D, state: GameState, ui: U
   const err = draftError(d.comp, budget);
   ctx.font = '11px monospace'; ctx.fillStyle = C.hudDim;
   ctx.fillText(`Budget ${budget} WB · unspent WB carries into the match as starting currency`, PX + 24, PY + 54);
-  ctx.fillText(`${CONFIG.SQUAD_SLOTS} squad slots (infantry/AT/recon) · ${CONFIG.TANK_CAP} armour max · ${CONFIG.ARTILLERY_CAP} battery max`, PX + 24, PY + 70);
+  ctx.fillText(`${CONFIG.SQUAD_SLOTS} squad slots (infantry/AT/recon) · ${CONFIG.TANK_CAP} armour max · artillery comes as the Barrage order`, PX + 24, PY + 70);
   // header
   ctx.fillStyle = C.hudDim; ctx.font = 'bold 9px monospace';
   ctx.fillText('UNIT', PX + 24, ROW0 - 10); ctx.fillText('COST', PX + 300, ROW0 - 10); ctx.textAlign = 'center'; ctx.fillText('COUNT', BTN.minus + (BTN.plus + BTN.w - BTN.minus) / 2, ROW0 - 10); ctx.textAlign = 'left'; ctx.fillText('NOTE', PX + 520, ROW0 - 10);
@@ -67,7 +67,7 @@ export function drawDraft(ctx: CanvasRenderingContext2D, state: GameState, ui: U
     ctx.fillStyle = C.hudDim; ctx.font = '9px monospace'; ctx.textAlign = 'left'; ctx.fillText(NOTES[k], PX + 520, cy);
   }
   // totals
-  const ty = ROW0 + 5 * ROW_H + 18;
+  const ty = ROW0 + ROWS * ROW_H + 18;
   ctx.fillStyle = C.hudText; ctx.font = 'bold 13px monospace'; ctx.textAlign = 'left';
   ctx.fillText(`Spent ${cost} / ${budget} WB   →   ${Math.max(0, budget - cost)} WB carried in`, PX + 24, ty);
   if (err) { ctx.fillStyle = C.alarm; ctx.font = '11px monospace'; ctx.fillText(err.toUpperCase(), PX + 24, ty + 20); }

@@ -4,7 +4,7 @@ import { CONFIG } from '../config';
 import { createSquad, hqCenter, type GameState, type Side, type SquadKind } from '../state';
 import { v } from '../vec';
 
-export const DRAFT_KINDS: SquadKind[] = ['infantry', 'at', 'recon', 'tank', 'artillery'];
+export const DRAFT_KINDS: SquadKind[] = ['infantry', 'at', 'recon', 'tank']; // artillery comes only as the Barrage order
 
 export function draftCost(comp: Record<SquadKind, number>): number {
   let c = 0;

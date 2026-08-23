@@ -150,6 +150,7 @@ export const CONFIG = {
   POINT_RADIUS: 60,
   POINT_COUNT: 5,
   CAPTURE_SECONDS_PER_DOT: 60, // 1 dot of superiority captures in this long; rate scales with superiority
+  CAPTURE_ROLLBACK_MULT: 0.5, // defender superiority rolls progress back at this fraction of the capture rate
   CAPTURE_MAX_SUPERIORITY: 3, // superiority beyond this does not speed capture
 
   // ---- Spawning (bible §6) ----
@@ -158,7 +159,7 @@ export const CONFIG = {
   GARRISON_DISABLE_R: 50, // enemy dot inside → no spawns
   GARRISON_DESTROY_SECONDS: 10, // continuous enemy presence → destroyed
   SPAWN_HUNT_R: 90, // a squad whose goal is within this of a visible enemy garrison/OP walks onto it instead
-  GARRISON_COST_WB: 300,
+  GARRISON_COST_WB: 200,
   GARRISON_COOLDOWN: 120,
   GARRISON_REQUIRES_SUPPLY: true, // Phase 4: needs a supply drop within SUPPLY_RADIUS
   SUPPLY_RADIUS: 75,
@@ -175,10 +176,11 @@ export const CONFIG = {
   RESPAWN_REJOIN: true, // respawned dots path back to their squad
 
   // ---- Economy (bible §7), per minute ----
-  WB_BASE: 10, WB_PER_POINT: 15,
-  MUN_BASE: 50, MUN_PER_POINT: 25,
-  MAN_BASE: 50, MAN_PER_POINT: 25,
-  FUEL_BASE: 50, FUEL_PER_POINT: 25,
+  // base up / per-point down vs the bible so holding 4 points does not out-reinforce the attacker 2:1
+  WB_BASE: 15, WB_PER_POINT: 15,
+  MUN_BASE: 70, MUN_PER_POINT: 15,
+  MAN_BASE: 80, MAN_PER_POINT: 15,
+  FUEL_BASE: 70, FUEL_PER_POINT: 15,
   START_WB: 200, // Phase 4 replaces with unspent draft budget
   START_MUN: 300,
   START_MAN: 300,
@@ -186,10 +188,10 @@ export const CONFIG = {
 
   // ---- Draft (bible §3.2) ----
   DRAFT_BUDGET_WB: 1000,
-  UNIT_COST: { infantry: 100, at: 150, recon: 125, tank: 250, artillery: 200 } as Record<string, number>,
+  UNIT_COST: { infantry: 100, at: 150, recon: 125, tank: 250, artillery: 200 } as Record<string, number>, // artillery is no longer draftable (barrage ability only)
   SQUAD_SLOTS: 6, // infantry + at + recon together
   TANK_CAP: 2,
-  ARTILLERY_CAP: 1,
+  ARTILLERY_CAP: 0, // batteries removed from the draft; artillery = the Barrage order
   AI_DRAFT: { infantry: 3, at: 1, recon: 1, tank: 1, artillery: 0 } as Record<string, number>, // 3×100+150+125+250 = 825 → 175 WB carried
   TANK_RESPAWN_FUEL: 150, // Fuel per tank respawn (at the HQ, on the wave)
   TANK_RESPAWNS_PER_SLOT: 99, // bible says 1; playtest wanted tanks back in the fight
@@ -200,7 +202,7 @@ export const CONFIG = {
     strafe: { cost: 300, pool: 'mun', cooldown: 240 },
     barrage: { cost: 250, pool: 'mun', cooldown: 180 },
     supply: { cost: 100, pool: 'fuel', cooldown: 90 },
-    garrison: { cost: 300, pool: 'wb', cooldown: 120 },
+    garrison: { cost: 200, pool: 'wb', cooldown: 120 },
     redeploy: { cost: 75, pool: 'wb', cooldown: 60 },
   } as Record<string, { cost: number; pool: 'wb' | 'mun' | 'man' | 'fuel'; cooldown: number }>,
   RECON_RADIUS: 200,
@@ -219,6 +221,12 @@ export const CONFIG = {
   SUPPLY_LIFETIME: 120, // seconds a drop stays usable
   GARRISON_HP: 100, // shells: a garrison dies to a few direct hits
   SHELL_SPAWN_DAMAGE: 60,
+
+  // ---- Dig in (playtest addition): a squad holding a defend flag, still and out of contact, entrenches ----
+  DIG_IN_SECONDS: 20,
+  DIG_IN_HIT_MULT: 0.65, // like cover: incoming hit chance ×, damage × (does NOT conceal)
+  DIG_IN_DMG_MULT: 0.75,
+  DIG_IN_MOVE_BREAK: 6, // px a dot may drift before its entrenchment is lost
 
   // ---- Commander AI (bible §10.2) ----
   AI_DIFFICULTY: 'normal' as 'easy' | 'normal' | 'hard', // the one knob; ?ai=easy|normal|hard overrides

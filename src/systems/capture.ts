@@ -18,7 +18,7 @@ export function updateCapture(state: GameState, dt: number): void {
   }
   // tanks count as one body; infantry dots each count as one — superiority is raw count
   const diff = Math.max(-CONFIG.CAPTURE_MAX_SUPERIORITY, Math.min(CONFIG.CAPTURE_MAX_SUPERIORITY, us - pavn));
-  const rate = diff / CONFIG.CAPTURE_SECONDS_PER_DOT; // per second
+  const rate = (diff / CONFIG.CAPTURE_SECONDS_PER_DOT) * (diff < 0 ? CONFIG.CAPTURE_ROLLBACK_MULT : 1); // per second; rollback is slower
   ps.progress = Math.max(0, Math.min(1, ps.progress + rate * dt));
   if (ps.progress >= 1) {
     ps.owner = 'US';

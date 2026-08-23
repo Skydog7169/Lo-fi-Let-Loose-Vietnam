@@ -53,8 +53,9 @@ export function drawRoster(ctx: CanvasRenderingContext2D, state: GameState, ui: 
     ctx.fillStyle = C.hudText; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left';
     ctx.fillText(`${sq.label} ${KIND_SHORT[sq.kind] ?? sq.kind}`, x + 9, y + 9);
     // state
-    ctx.fillStyle = STATE_COL[sq.state] ?? C.hudDim; ctx.font = '8px monospace'; ctx.textAlign = 'right';
-    ctx.fillText(sq.state, x + CHIP_W - 5, y + 9);
+    const dug = sq.dotIds.some((id) => state.dots[id]!.alive && state.dots[id]!.dugIn);
+    ctx.fillStyle = dug && sq.state === 'IDLE' ? '#c8a165' : STATE_COL[sq.state] ?? C.hudDim; ctx.font = '8px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(dug && sq.state === 'IDLE' ? 'DUG IN' : sq.state, x + CHIP_W - 5, y + 9);
     // alive pips
     if (sq.kind === 'tank' || sq.kind === 'artillery') {
       const d = state.dots[sq.dotIds[0]!]!;

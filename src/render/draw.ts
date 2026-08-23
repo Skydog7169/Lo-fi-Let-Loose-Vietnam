@@ -159,6 +159,10 @@ function drawSquad(ctx: CanvasRenderingContext2D, state: GameState, sq: Squad, u
     if (!d.alive || !visibleDot(state, ui, d)) continue;
     if (sq.kind === 'tank') { drawTank(ctx, d, col); continue; }
     if (sq.kind === 'artillery') { drawBattery(ctx, d, col); continue; }
+    if (d.dugIn) { // entrenched: a small berm arc facing the dot's front
+      ctx.strokeStyle = 'rgba(60,40,20,0.8)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS + 3, d.facing - 1.1, d.facing + 1.1); ctx.stroke();
+    }
     if (ui.hoverSquadId === sq.id) { // grabbable: halo on hovered squad
       ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS + 3, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();

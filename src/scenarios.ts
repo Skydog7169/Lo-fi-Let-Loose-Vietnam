@@ -108,6 +108,13 @@ export const SCENARIOS: Record<string, (s: GameState) => void> = {
     place(s, 'US', 'infantry', 'A', v(640, 250), { kind: 'attack', pos: v(940, 250) });
     place(s, 'PAVN', 'infantry', 'A', v(940, 250), { kind: 'attack', pos: v(640, 250) });
   },
+  /** Dig-in: a US squad holds a defend flag in the open paddy for 30 s (entrenches), then an equal PAVN squad attacks across open ground. */
+  dugin(s) {
+    combatOnly(s);
+    place(s, 'US', 'infantry', 'A', v(1060, 280), { kind: 'defend', pos: v(1060, 280) }); // no cover within 100px
+    // attacker starts a long walk away so the defender has time to dig (≈ 1000px ≈ 25 s > DIG_IN_SECONDS)
+    place(s, 'PAVN', 'infantry', 'A', v(100, 560), { kind: 'attack', pos: v(1040, 280) });
+  },
   /** Numbers: two US squads vs one PAVN squad in the open — should be quick and end with a push. */
   outnumber(s) {
     combatOnly(s);

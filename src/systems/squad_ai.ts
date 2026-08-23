@@ -171,6 +171,18 @@ export function updateSquadAi(state: GameState): void {
     else if (engaging) squad.state = 'ENGAGING';
     else if (squad.state === 'ENGAGING' || squad.state === 'SUPPRESSED') squad.state = 'MOVING';
 
+    // ---- dig in: defend flag, arrived, still, no contact → entrenched (cover in the open) ----
+    const defending = !!squad.marker && squad.marker.kind === 'defend' && !squad.fallback && !isVehicle(squad.kind) && squad.kind !== 'artillery';
+    for (const d of alive) {
+      if (d.dugIn && dist2(d.pos, d.dugIn) > CONFIG.DIG_IN_MOVE_BREAK ** 2) { d.dugIn = null; d.digTimer = 0; }
+      const settled = defending && d.wp >= squad.path.length && !d.moving && !d.coverSeek;
+      if (!defending || !settled) { d.digTimer = 0; if (!settled) d.dugIn = null; continue; }
+      if (d.dugIn) continue;
+      if (d.targetId >= 0 || d.suppression > 0.2) { d.digTimer = 0; continue; } // can't dig under fire
+      d.digTimer += 1 / CONFIG.TICK_HZ;
+      if (d.digTimer >= CONFIG.DIG_IN_SECONDS) d.dugIn = v(d.pos.x, d.pos.y);
+    }
+
     // ---- cover seeking while engaging (bible §9.2) ----
     const vehicle = isVehicle(squad.kind);
     for (const d of alive) {

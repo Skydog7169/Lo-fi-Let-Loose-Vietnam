@@ -34,6 +34,8 @@ export interface Dot {
   fireCooldown: number; // seconds
   coverSeek: Vec | null; // short step into adjacent cover while engaging
   moving: boolean; // moved this tick → cannot fire (halt, face, fire)
+  digTimer: number; // seconds held still on a defend flag out of contact
+  dugIn: Vec | null; // entrenched at this position (cover bonus in the open)
   shells: number; // artillery battery ammo
 }
 
@@ -198,6 +200,8 @@ export function createSquad(state: GameState, side: Side, kind: SquadKind, label
       fireCooldown: 0,
       coverSeek: null,
       moving: false,
+      digTimer: 0,
+      dugIn: null,
       shells: kind === 'artillery' ? CONFIG.ARTY_SHELLS : 0,
     };
     state.dots.push(dot);

@@ -82,10 +82,13 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
   const targetVehicle = isVehicle(ts.kind);
   if (state.squads[shooter.squadId]!.kind === 'tank' && !targetVehicle) { fireHe(state, shooter, target); return; }
   const w = weaponFor(state, shooter, target);
-  const covered = !targetVehicle && isCoverAt(state.grid, target.pos) && !isFlanking(shooter, target);
+  const flank = isFlanking(shooter, target);
+  const covered = !targetVehicle && isCoverAt(state.grid, target.pos) && !flank;
+  const dug = !targetVehicle && !covered && !!target.dugIn && !flank; // entrenched in the open: cover-like, still visible
   let hit = w.hit * (1 - CONFIG.SUPPRESS_ACC_MULT_MAX * shooter.suppression);
   let dmg = w.dmg;
   if (covered) { hit *= CONFIG.COVER_HIT_MULT; dmg *= CONFIG.COVER_DMG_MULT; }
+  else if (dug) { hit *= CONFIG.DIG_IN_HIT_MULT; dmg *= CONFIG.DIG_IN_DMG_MULT; }
   if (!targetVehicle) {
     // weight of fire: pinned men are easier to hit; shaken (outnumbered + pinned) men more so
     hit *= 1 + CONFIG.SUPPRESSED_TARGET_VULNERABILITY * target.suppression;
