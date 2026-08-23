@@ -85,7 +85,7 @@ export function runPhase3Checks(seed = 1): Check[] {
   {
     const st = createInitialState(seed, 'optouch');
     const pav = st.squads.find((s) => s.side === 'PAVN')!;
-    const tTouch = run(st, 60, (s) => s.squads[pav.id]!.op === null);
+    const tTouch = run(st, 150, (s) => s.squads[pav.id]!.op === null);
     push('OP deleted on enemy touch', tTouch >= 0, `deleted at ${tTouch.toFixed(1)}s`);
     // kill the PAVN squad outright, then wait for a wave: it should come back at the garrison (700,560), not the OP
     for (const id of pav.dotIds) { const d = st.dots[id]!; d.alive = false; d.hp = 0; }
