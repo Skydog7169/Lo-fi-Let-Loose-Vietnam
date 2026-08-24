@@ -75,7 +75,8 @@ export const CONFIG = {
   INFANTRY_SPEED: 33, // px/s at 100% terrain
   RECON_SPEED: 37,
   TANK_SPEED: 46,
-  SQUAD_SIZE: { infantry: 6, at: 6, recon: 4, tank: 1, artillery: 1 } as Record<string, number>,
+  SQUAD_SIZE: { infantry: 6, at: 6, recon: 2, tank: 1, artillery: 1 } as Record<string, number>, // recon = 2-man team (HLL)
+  PERSONNEL: { infantry: 6, at: 6, recon: 2, tank: 3, artillery: 3 } as Record<string, number>, // troops a unit costs against ROSTER_CAP (tank = 3 crew)
   DOT_HP: 100,
   TANK_HP: 600,
   DOT_RADIUS: 2.5,
@@ -220,7 +221,8 @@ export const CONFIG = {
   // ---- Draft (bible §3.2) ----
   DRAFT_BUDGET_WB: 1000,
   UNIT_COST: { infantry: 100, at: 150, recon: 125, tank: 250, artillery: 200 } as Record<string, number>, // artillery is no longer draftable (barrage ability only)
-  SQUAD_SLOTS: 6, // infantry + at + recon together
+  ROSTER_CAP: 50, // HLL company: 50 troops a side (100 on the field)
+  SQUAD_SLOTS: 6, // legacy (no longer enforced)
   TANK_CAP: 2,
   ARTILLERY_CAP: 0, // batteries removed from the draft; artillery = the Barrage order
   AI_DRAFT: { infantry: 3, at: 1, recon: 1, tank: 1, artillery: 0 } as Record<string, number>, // 3×100+150+125+250 = 825 → 175 WB carried

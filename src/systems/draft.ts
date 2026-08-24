@@ -12,9 +12,16 @@ export function draftCost(comp: Record<SquadKind, number>): number {
   return c;
 }
 
+/** Troops this composition puts on the field (6 per squad, 2 per recon team, 3 per tank crew). */
+export function draftTroops(comp: Record<SquadKind, number>): number {
+  let n = 0;
+  for (const k of DRAFT_KINDS) n += (comp[k] ?? 0) * (CONFIG.PERSONNEL[k] ?? 0);
+  return n;
+}
+
 export function draftError(comp: Record<SquadKind, number>, budget: number = CONFIG.DRAFT_BUDGET_WB): string | null {
   for (const k of DRAFT_KINDS) if ((comp[k] ?? 0) < 0 || !Number.isInteger(comp[k] ?? 0)) return 'bad count';
-  if ((comp.infantry ?? 0) + (comp.at ?? 0) + (comp.recon ?? 0) > CONFIG.SQUAD_SLOTS) return `max ${CONFIG.SQUAD_SLOTS} squads`;
+  if (draftTroops(comp) > CONFIG.ROSTER_CAP) return `over ${CONFIG.ROSTER_CAP} troops`;
   if ((comp.tank ?? 0) > CONFIG.TANK_CAP) return `max ${CONFIG.TANK_CAP} armour`;
   if ((comp.artillery ?? 0) > CONFIG.ARTILLERY_CAP) return `max ${CONFIG.ARTILLERY_CAP} battery`;
   if (draftCost(comp) > budget) return 'over budget';
@@ -28,7 +35,7 @@ export function applyDraft(state: GameState, side: Side, comp: Record<SquadKind,
   if (draftError(comp, budget)) return false;
   const hq = state.map.hqs.find((h) => h.side === side)!.rect;
   const c = hqCenter(state, side);
-  const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
   let li = 0, row = 0;
   const slotPos = () => { const y = hq.y + 22 + row * 26; row++; return v(c.x, Math.min(hq.y + hq.h - 14, y)); };
   for (let i = 0; i < (comp.infantry ?? 0); i++) createSquad(state, side, 'infantry', labels[li++]!, slotPos());

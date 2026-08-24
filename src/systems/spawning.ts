@@ -146,9 +146,11 @@ function updateWaves(state: GameState, dt: number): void {
       const dead = sq.dotIds.map((id) => state.dots[id]!).filter((d) => !d.alive);
       if (!dead.length) continue;
       if (sq.kind === 'tank') {
-        // Fuel-funded respawn at the HQ (TANK_RESPAWNS_PER_SLOT per match)
-        if ((state.tankRespawns[sq.id] ?? 0) >= CONFIG.TANK_RESPAWNS_PER_SLOT || res.fuel < CONFIG.TANK_RESPAWN_FUEL) continue;
+        // Fuel-funded respawn at the HQ (TANK_RESPAWNS_PER_SLOT per match); a new 3-man crew comes out of Manpower
+        const crewMan = CONFIG.MANPOWER_PER_SOLDIER * (CONFIG.PERSONNEL['tank'] ?? 3);
+        if ((state.tankRespawns[sq.id] ?? 0) >= CONFIG.TANK_RESPAWNS_PER_SLOT || res.fuel < CONFIG.TANK_RESPAWN_FUEL || res.man < crewMan) continue;
         res.fuel -= CONFIG.TANK_RESPAWN_FUEL;
+        res.man -= crewMan;
         state.tankRespawns[sq.id] = (state.tankRespawns[sq.id] ?? 0) + 1;
         for (const d of dead) respawnDot(state, sq, d, hqCenter(state, side), null);
         sq.pathGoal = null;

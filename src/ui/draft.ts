@@ -1,12 +1,12 @@
 // Pre-match draft screen: spend the War Bond budget on a force within caps.
 import { CONFIG } from '../config';
 import type { GameState, SquadKind } from '../state';
-import { DRAFT_KINDS, draftCost, draftError } from '../systems/draft';
+import { DRAFT_KINDS, draftCost, draftError, draftTroops } from '../systems/draft';
 import type { UiState } from './input';
 import type { Vec } from '../vec';
 
 const C = CONFIG.COLORS;
-const NAMES: Record<SquadKind, string> = { infantry: 'Infantry Squad (6)', at: 'AT Infantry Squad (6)', recon: 'Recon Squad (4)', tank: 'Tank', artillery: 'Artillery Battery' };
+const NAMES: Record<SquadKind, string> = { infantry: 'Infantry Squad', at: 'AT Infantry Squad', recon: 'Recon Team', tank: 'Tank', artillery: 'Artillery Battery' };
 const NOTES: Record<SquadKind, string> = {
   infantry: 'the baseline rifle squad',
   at: 'carries rockets — kills tanks and garrisons',
@@ -53,11 +53,11 @@ export function drawDraft(ctx: CanvasRenderingContext2D, state: GameState, ui: U
   const err = draftError(d.comp, budget);
   ctx.font = '11px monospace'; ctx.fillStyle = C.hudDim;
   ctx.fillText(`Budget ${budget} WB · leftover carries in as starting WB`, PX + 24, PY + 56);
-  ctx.fillText(`${CONFIG.SQUAD_SLOTS} squad slots · ${CONFIG.TANK_CAP} armour max · artillery = the Barrage order`, PX + 24, PY + 74);
+  ctx.fillText(`${CONFIG.ROSTER_CAP} troops a side · 6 per squad · 3 per tank crew · 2 per recon team · ${CONFIG.TANK_CAP} armour max`, PX + 24, PY + 74);
   // header
   ctx.fillStyle = C.hudDim; ctx.font = 'bold 9px monospace';
   ctx.fillText('UNIT', PX + 24, ROW0 - 10);
-  ctx.textAlign = 'right'; ctx.fillText('COST', COL_COST, ROW0 - 10);
+  ctx.textAlign = 'right'; ctx.fillText('COST · TROOPS', COL_COST, ROW0 - 10);
   ctx.textAlign = 'center'; ctx.fillText('COUNT', BTN.minus + (BTN.plus + BTN.w - BTN.minus) / 2, ROW0 - 10);
   ctx.textAlign = 'left';
   for (let i = 0; i < DRAFT_KINDS.length; i++) {
@@ -68,7 +68,7 @@ export function drawDraft(ctx: CanvasRenderingContext2D, state: GameState, ui: U
     ctx.fillStyle = C.hudText; ctx.font = '12px monospace'; ctx.textAlign = 'left';
     ctx.fillText(NAMES[k], PX + 24, cy - 8);
     ctx.fillStyle = C.hudDim; ctx.font = '9px monospace'; ctx.fillText(NOTES[k], PX + 24, cy + 10);
-    ctx.fillStyle = '#f2d27a'; ctx.font = '12px monospace'; ctx.textAlign = 'right'; ctx.fillText(`${CONFIG.UNIT_COST[k]} WB`, COL_COST, cy);
+    ctx.fillStyle = '#f2d27a'; ctx.font = '12px monospace'; ctx.textAlign = 'right'; ctx.fillText(`${CONFIG.UNIT_COST[k]} WB · ${CONFIG.PERSONNEL[k]}`, COL_COST, cy);
     ctx.textAlign = 'left';
     // buttons
     for (const [bx, label] of [[BTN.minus, '−'], [BTN.plus, '+']] as [number, string][]) {
@@ -81,7 +81,7 @@ export function drawDraft(ctx: CanvasRenderingContext2D, state: GameState, ui: U
   // totals
   const ty = ROW0 + ROWS * ROW_H + 18;
   ctx.fillStyle = C.hudText; ctx.font = 'bold 13px monospace'; ctx.textAlign = 'left';
-  ctx.fillText(`Spent ${cost} / ${budget} WB   →   ${Math.max(0, budget - cost)} WB carried in`, PX + 24, ty);
+  ctx.fillText(`Spent ${cost} / ${budget} WB   ·   troops ${draftTroops(d.comp)} / ${CONFIG.ROSTER_CAP}   →   ${Math.max(0, budget - cost)} WB carried in`, PX + 24, ty);
   if (err) { ctx.fillStyle = C.alarm; ctx.font = '11px monospace'; ctx.fillText(err.toUpperCase(), PX + 24, ty + 20); }
   // deploy button
   const ok = !err;
