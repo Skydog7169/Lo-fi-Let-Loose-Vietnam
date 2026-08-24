@@ -7,7 +7,7 @@ import type { UiState } from './input';
 import type { Vec } from '../vec';
 
 const C = CONFIG.COLORS;
-export const PANEL_W = 150, CARD_W = 138, CARD_H = 54, CARD_GAP = 6, PANEL_X = CONFIG.LOGICAL_W - PANEL_W, PANEL_Y = 52;
+export const PANEL_W = 150, CARD_W = 138, CARD_H = 48, CARD_GAP = 5, PANEL_X = CONFIG.LOGICAL_W - PANEL_W, PANEL_Y = 46;
 
 export const ABILITY_INFO: Record<AbilityKind, { name: string; hint: string; mode: 'circle' | 'line' | 'point' | 'garrison' | 'pickGarrison' }> = {
   recon: { name: 'RECON FLIGHT', hint: 'reveal r200 · 30s', mode: 'circle' },
@@ -16,6 +16,9 @@ export const ABILITY_INFO: Record<AbilityKind, { name: string; hint: string; mod
   supply: { name: 'SUPPLY DROP', hint: 'lands instantly · lasts 2:00', mode: 'point' },
   garrison: { name: 'NEW GARRISON', hint: 'on supplied ground', mode: 'garrison' },
   redeploy: { name: 'REDEPLOY', hint: 'pack 30s · move', mode: 'pickGarrison' },
+  wire: { name: 'BARBED WIRE', hint: 'line · slows infantry', mode: 'line' },
+  trench: { name: 'TRENCH', hint: 'line · cover for dots in it', mode: 'line' },
+  bunker: { name: 'BUNKER', hint: 'strong cover · 400hp', mode: 'point' },
 };
 
 export function cardRect(i: number): { x: number; y: number; w: number; h: number } {

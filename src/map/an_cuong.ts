@@ -25,17 +25,23 @@ export interface MapData {
   /** x-coordinate midpoints between consecutive points; used for sector lines (Phase 3). */
 }
 
-const P = (x: number, y: number): Vec => ({ x, y });
+/** The map is authored at 1200×800 and scaled up: bigger world, same relative layout. */
+export const MAP_SCALE = 1.5;
+const K = MAP_SCALE;
+const P = (x: number, y: number): Vec => ({ x: x * K, y: y * K });
+const R = (x: number, y: number, w: number, h: number) => ({ x: x * K, y: y * K, w: w * K, h: h * K });
 
 // River centreline, north → south, then offset into a band polygon.
 const RIVER_CENTER: Vec[] = [
   P(562, -10), P(548, 110), P(572, 230), P(556, 350), P(582, 470),
   P(560, 590), P(588, 700), P(570, 810),
 ];
-const RIVER_HALF_W = 17;
+const RIVER_HALF_W = 17 * K;
 function riverPoly(center: Vec[], halfW: number): Vec[] {
-  const left = center.map((p) => P(p.x - halfW, p.y));
-  const right = center.map((p) => P(p.x + halfW, p.y)).reverse();
+  // center points are already in map coordinates — do NOT re-scale them here
+  const raw = (x: number, y: number): Vec => ({ x, y });
+  const left = center.map((p) => raw(p.x - halfW, p.y));
+  const right = center.map((p) => raw(p.x + halfW, p.y)).reverse();
   return [...left, ...right];
 }
 
@@ -49,8 +55,8 @@ const ROAD_NORTH_SPUR: Vec[] = [P(840, 340), P(880, 220), P(900, 90)];
 
 export const AN_CUONG: MapData = {
   name: 'An Cuong',
-  width: 1200,
-  height: 800,
+  width: 1200 * K,
+  height: 800 * K,
   regions: [
     // --- Woods: the north corridor (infiltration highway) ---
     {
@@ -73,37 +79,48 @@ export const AN_CUONG: MapData = {
     { terrain: 'woods', shape: { kind: 'poly', pts: [P(690, 540), P(760, 530), P(780, 575), P(700, 585)] } },
     { terrain: 'woods', shape: { kind: 'poly', pts: [P(930, 470), P(1000, 480), P(990, 540), P(920, 530)] } },
 
+    // --- Elephant grass: conceals, no cover — infiltration fields (new with the 1.5x map) ---
+    { terrain: 'grass', shape: { kind: 'poly', pts: [P(150, 210), P(290, 195), P(330, 260), P(300, 330), P(170, 320)] } },
+    { terrain: 'grass', shape: { kind: 'poly', pts: [P(470, 430), P(560, 415), P(600, 470), P(560, 505), P(470, 500)] } },
+    { terrain: 'grass', shape: { kind: 'poly', pts: [P(660, 210), P(800, 195), P(830, 260), P(790, 300), P(670, 290)] } },
+    { terrain: 'grass', shape: { kind: 'poly', pts: [P(880, 430), P(1010, 415), P(1050, 480), P(1000, 540), P(890, 520)] } },
+    { terrain: 'grass', shape: { kind: 'poly', pts: [P(420, 630), P(560, 615), P(600, 680), P(540, 720), P(430, 700)] } },
+    // --- Marsh: slow, exposed, no vehicles — pinches the southern route ---
+    { terrain: 'marsh', shape: { kind: 'poly', pts: [P(590, 560), P(660, 545), P(700, 600), P(660, 650), P(600, 640)] } },
+    { terrain: 'marsh', shape: { kind: 'poly', pts: [P(480, 130), P(560, 110), P(600, 170), P(560, 215), P(490, 205)] } },
+    { terrain: 'marsh', shape: { kind: 'poly', pts: [P(1050, 560), P(1140, 545), P(1170, 610), P(1110, 660), P(1050, 640)] } },
+
     // --- River (impassable) ---
     { terrain: 'river', shape: { kind: 'poly', pts: riverPoly(RIVER_CENTER, RIVER_HALF_W) } },
 
     // --- Roads (pale lines) ---
-    { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_MAIN, width: 8 } },
-    { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_SOUTH, width: 8 } },
-    { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_NORTH_SPUR, width: 6 } },
+    { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_MAIN, width: 8 * K } },
+    { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_SOUTH, width: 8 * K } },
+    { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_NORTH_SPUR, width: 6 * K } },
 
     // --- Crossings: 2 bridges on the roads + 1 ford hidden in the north woods ---
-    { terrain: 'bridge', shape: { kind: 'rect', x: 536, y: 289, w: 58, h: 22 } },
-    { terrain: 'bridge', shape: { kind: 'rect', x: 546, y: 510, w: 58, h: 22 } },
-    { terrain: 'ford', shape: { kind: 'rect', x: 520, y: 80, w: 64, h: 34 } },
+    { terrain: 'bridge', shape: { kind: 'rect', ...R(536, 289, 58, 22) } },
+    { terrain: 'bridge', shape: { kind: 'rect', ...R(546, 510, 58, 22) } },
+    { terrain: 'ford', shape: { kind: 'rect', ...R(520, 80, 64, 34) } },
 
     // --- Villages: gray block clusters on points 2 and 4 ---
-    { terrain: 'village', shape: { kind: 'rect', x: 400, y: 292, w: 30, h: 22 } },
-    { terrain: 'village', shape: { kind: 'rect', x: 448, y: 286, w: 36, h: 26 } },
-    { terrain: 'village', shape: { kind: 'rect', x: 412, y: 344, w: 30, h: 22 } },
-    { terrain: 'village', shape: { kind: 'rect', x: 458, y: 340, w: 32, h: 26 } },
-    { terrain: 'village', shape: { kind: 'rect', x: 392, y: 372, w: 42, h: 20 } },
-    { terrain: 'village', shape: { kind: 'rect', x: 478, y: 310, w: 24, h: 20 } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(400, 292, 30, 22) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(448, 286, 36, 26) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(412, 344, 30, 22) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(458, 340, 32, 26) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(392, 372, 42, 20) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(478, 310, 24, 20) } },
 
-    { terrain: 'village', shape: { kind: 'rect', x: 800, y: 300, w: 32, h: 24 } },
-    { terrain: 'village', shape: { kind: 'rect', x: 850, y: 296, w: 34, h: 26 } },
-    { terrain: 'village', shape: { kind: 'rect', x: 806, y: 356, w: 28, h: 22 } },
-    { terrain: 'village', shape: { kind: 'rect', x: 854, y: 354, w: 36, h: 24 } },
-    { terrain: 'village', shape: { kind: 'rect', x: 796, y: 384, w: 40, h: 18 } },
-    { terrain: 'village', shape: { kind: 'rect', x: 876, y: 326, w: 24, h: 20 } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(800, 300, 32, 24) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(850, 296, 34, 26) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(806, 356, 28, 22) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(854, 354, 36, 24) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(796, 384, 40, 18) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(876, 326, 24, 20) } },
 
     // --- HQ zones (open, just flagged for spawning/fallback) ---
-    { terrain: 'hq', shape: { kind: 'rect', x: 0, y: 320, w: 90, h: 160 } },
-    { terrain: 'hq', shape: { kind: 'rect', x: 1110, y: 340, w: 90, h: 160 } },
+    { terrain: 'hq', shape: { kind: 'rect', ...R(0, 320, 90, 160) } },
+    { terrain: 'hq', shape: { kind: 'rect', ...R(1110, 340, 90, 160) } },
   ],
   points: [
     { id: 1, name: 'PADDY WEST', pos: P(230, 420) },
@@ -113,8 +130,8 @@ export const AN_CUONG: MapData = {
     { id: 5, name: 'PADDY EAST', pos: P(1030, 430) },
   ],
   hqs: [
-    { side: 'US', rect: { x: 0, y: 320, w: 90, h: 160 } },
-    { side: 'PAVN', rect: { x: 1110, y: 340, w: 90, h: 160 } },
+    { side: 'US', rect: R(0, 320, 90, 160) },
+    { side: 'PAVN', rect: R(1110, 340, 90, 160) },
   ],
 };
 

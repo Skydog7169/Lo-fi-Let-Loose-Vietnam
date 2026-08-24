@@ -84,7 +84,7 @@ function drawBottom(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState
   ctx.fillStyle = C.hudBg; ctx.fillRect(0, H - 22, W, 22);
   const modeTxt = ui.mode.kind === 'placeGarrison' ? '  [PLACING GARRISON — click to place, right-click/Esc cancel]' : ui.mode.kind === 'redeploy' ? '  [REDEPLOY — click new spot, Esc cancel]' : '';
   text(ctx, `tick ${state.tick}  fps ${fps.toFixed(0)}  zoom ${ui.cam.zoom.toFixed(2)}${ui.revealAll ? '  [REVEAL ALL]' : ''}${modeTxt}`, 8, H - 11, C.hudDim, '10px monospace');
-  text(ctx, 'drag squad/flag: attack   right-drag: defend   drag garrison: move   orange tracers = flanking fire (ignores cover)   1–6: orders   G: garrison', W - 8, H - 11, C.hudDim, '10px monospace', 'right');
+  text(ctx, 'drag squad/flag: attack   right-drag: defend   drag garrison: move   orange tracers = flanking fire (ignores cover)   1–9: orders   G: garrison', W - 8, H - 11, C.hudDim, '10px monospace', 'right');
 
 }
 

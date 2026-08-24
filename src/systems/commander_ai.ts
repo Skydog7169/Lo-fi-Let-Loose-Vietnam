@@ -82,16 +82,17 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
 
   /** Waypoints through the north wooded corridor toward the enemy rear. */
   function corridorPlan(vs: VisibleState): Vec[] {
-    const y = 85;
-    const rearX = Math.max(120, Math.min(map.width - 120, vs.pub.sectorX - dirToEnemy * 140));
-    const xs = side === 'PAVN' ? [900, 700, 552, 380] : [200, 380, 552, 760];
+    const K = map.width / 1200; // corridor waypoints authored on the 1200-wide base map
+    const y = 85 * K;
+    const rearX = Math.max(120 * K, Math.min(map.width - 120 * K, vs.pub.sectorX - dirToEnemy * 140 * K));
+    const xs = (side === 'PAVN' ? [900, 700, 552, 380] : [200, 380, 552, 760]).map((x) => x * K);
     const wps: Vec[] = [];
     for (const x of xs) {
       // stop adding once we are past the rear target
       if (side === 'PAVN' ? x < rearX : x > rearX) break;
       wps.push(v(x, y));
     }
-    wps.push(v(rearX, 110));
+    wps.push(v(rearX, 110 * K));
     return wps;
   }
 
@@ -147,9 +148,16 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
       .slice(0, side === 'US' ? 99 : CONFIG.AI_POINT_SQUADS)
       .map((x) => x.s);
     const pointIds = new Set(pointSquads.map((s) => s.id));
+    // counter-attack: if the enemy is winning the circle, defenders assault the point instead of sitting on markers
+    const activePt = vs.pub.points[vs.pub.active];
+    const losingPoint = side === 'PAVN' && activePt !== undefined && activePt.progress > 0.2;
     pointSquads.forEach((s, i) => {
       const off = v(-dirToEnemy * 30 + (i ? 0 : 10), ((i % 2 ? 1 : -1) * (35 + Math.floor(i / 2) * 30)));
-      const want = side === 'US' ? { kind: 'attack' as const, pos: v(activePos.x + off.x * 0.5, activePos.y + off.y * 0.5) } : { kind: 'defend' as const, pos: v(activePos.x + off.x, activePos.y + off.y) };
+      const want = side === 'US'
+        ? { kind: 'attack' as const, pos: v(activePos.x + off.x * 0.5, activePos.y + off.y * 0.5) }
+        : losingPoint
+          ? { kind: 'attack' as const, pos: v(activePos.x + off.x * 0.3, activePos.y + off.y * 0.3) } // assault flag on the point → push into the circle
+          : { kind: 'defend' as const, pos: v(activePos.x + off.x, activePos.y + off.y) };
       if (!s.marker || s.marker.kind !== want.kind || dist(s.marker.pos, want.pos) > 12) cmd.issueMarker(s.id, want.kind, want.pos);
     });
     // remaining infantry: attacker flanks the point from the side; defender screens the approach
@@ -166,6 +174,19 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
       if (s.kind !== 'tank') continue;
       const want = side === 'US' ? { kind: 'attack' as const, pos: v(activePos.x - 20, activePos.y) } : { kind: 'defend' as const, pos: v(activePos.x + 90, activePos.y + 20) };
       if (!s.marker || s.marker.kind !== want.kind || dist(s.marker.pos, want.pos) > 12) cmd.issueMarker(s.id, want.kind, want.pos);
+    }
+    // fortify (defender): a bunker behind the point, wire across the enemy approach — WB permitting, garrison first
+    if (side === 'PAVN' && vs.pub.phase === 'play') {
+      const wb = vs.own.res.wb;
+      const cds = vs.own.cooldowns;
+      const bunkerNear = vs.defenses.bunkers.some((b) => b.side === side && dist(b.pos, activePos) < 150);
+      if (!bunkerNear && wb >= CONFIG.ABILITY.bunker!.cost + 200 && cds.bunker <= 0) {
+        cmd.buyAbility('bunker', v(activePos.x - dirToEnemy * -35, activePos.y + 18));
+      } else if (wb >= CONFIG.ABILITY.wire!.cost + 320 && cds.wire <= 0) {
+        const wx = activePos.x + dirToEnemy * -95; // in front of the point, facing the enemy
+        const near = vs.defenses.wires.some((w) => w.side === side && Math.abs((w.a.x + w.b.x) / 2 - wx) < 60 && Math.abs((w.a.y + w.b.y) / 2 - activePos.y) < 90);
+        if (!near) cmd.buyAbility('wire', v(wx, activePos.y - 55), v(wx, activePos.y + 55));
+      }
     }
     // artillery battery: shell the largest visible cluster, else the active point when enemies are there
     const cluster = largestCluster(vs);

@@ -88,10 +88,13 @@ export interface Resources { wb: number; mun: number; man: number; fuel: number 
 export interface PointState { id: number; owner: Side; progress: number } // progress = attacker (US) capture 0..1
 
 export type MatchPhase = 'draft' | 'setup' | 'play' | 'ended';
-export type AbilityKind = 'recon' | 'strafe' | 'barrage' | 'supply' | 'garrison' | 'redeploy';
-export const ABILITIES: AbilityKind[] = ['recon', 'strafe', 'barrage', 'supply', 'garrison', 'redeploy'];
+export type AbilityKind = 'recon' | 'strafe' | 'barrage' | 'supply' | 'garrison' | 'redeploy' | 'wire' | 'trench' | 'bunker';
+export const ABILITIES: AbilityKind[] = ['recon', 'strafe', 'barrage', 'supply', 'garrison', 'redeploy', 'wire', 'trench', 'bunker'];
 export interface Recon { side: Side; pos: Vec; r: number; t: number }
 export interface Supply { side: Side; pos: Vec; t: number }
+export interface Wire { side: Side; a: Vec; b: Vec; hp: number } // slows infantry crossing; crushed by vehicles slowly, blown by explosives
+export interface Trench { side: Side; a: Vec; b: Vec } // cover-grade protection for any dot standing in it
+export interface Bunker { side: Side; pos: Vec; hp: number } // strong cover for friendlies near it; shelled like a garrison
 export interface Strafe { side: Side; a: Vec; b: Vec; delay: number; t: number; progress: number } // t = remaining sweep
 export interface Barrage { side: Side; pos: Vec; r: number; delay: number; t: number; shellsLeft: number; nextShell: number }
 
@@ -102,6 +105,7 @@ export interface VisibleState {
   side: Side;
   /** Own assets and public match facts — everything a commander legitimately knows. */
   own: { squads: Squad[]; garrisons: Garrison[]; res: Resources; cooldowns: Record<AbilityKind, number>; supplies: Supply[] };
+  defenses: { wires: Wire[]; trenches: Trench[]; bunkers: Bunker[] }; // both sides' — earthworks are visible to everyone
   pub: { points: PointState[]; active: number; sectorX: number; timer: number; phase: MatchPhase };
   enemyDots: Dot[]; // visible enemy dots (live references; do not mutate)
   enemyGarrisons: Garrison[];
@@ -152,6 +156,9 @@ export interface GameState {
   cooldowns: Record<Side, Record<AbilityKind, number>>; // seconds remaining
   recons: Recon[];
   supplies: Supply[];
+  wires: Wire[];
+  trenches: Trench[];
+  bunkers: Bunker[];
   strafes: Strafe[];
   barrages: Barrage[];
   tankRespawns: Record<number, number>; // by squad id
@@ -265,6 +272,9 @@ export function createEmptyState(seed: number, scenario: string): GameState {
     cooldowns: { US: zeroCooldowns(), PAVN: zeroCooldowns() },
     recons: [],
     supplies: [],
+    wires: [],
+    trenches: [],
+    bunkers: [],
     strafes: [],
     barrages: [],
     tankRespawns: {},
@@ -272,10 +282,10 @@ export function createEmptyState(seed: number, scenario: string): GameState {
   return state;
 }
 
-export const zeroCooldowns = (): Record<AbilityKind, number> => ({ recon: 0, strafe: 0, barrage: 0, supply: 0, garrison: 0, redeploy: 0 });
+export const zeroCooldowns = (): Record<AbilityKind, number> => ({ recon: 0, strafe: 0, barrage: 0, supply: 0, garrison: 0, redeploy: 0, wire: 0, trench: 0, bunker: 0 });
 
 export function emptyVisible(side: Side): VisibleState {
-  return { side, own: { squads: [], garrisons: [], res: { wb: 0, mun: 0, man: 0, fuel: 0 }, cooldowns: zeroCooldowns(), supplies: [] }, pub: { points: [], active: 0, sectorX: 0, timer: 0, phase: 'draft' }, enemyDots: [], enemyGarrisons: [], enemyOps: [], ghosts: [], dotVisible: new Uint8Array(0), garrisonVisible: new Uint8Array(0), opVisible: new Uint8Array(0) };
+  return { side, own: { squads: [], garrisons: [], res: { wb: 0, mun: 0, man: 0, fuel: 0 }, cooldowns: zeroCooldowns(), supplies: [] }, defenses: { wires: [], trenches: [], bunkers: [] }, pub: { points: [], active: 0, sectorX: 0, timer: 0, phase: 'draft' }, enemyDots: [], enemyGarrisons: [], enemyOps: [], ghosts: [], dotVisible: new Uint8Array(0), garrisonVisible: new Uint8Array(0), opVisible: new Uint8Array(0) };
 }
 
 export function createGarrison(state: GameState, side: Side, pos: Vec): Garrison {

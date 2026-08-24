@@ -3,7 +3,7 @@
 import { CONFIG } from '../config';
 import { cellCenter, cellOf, isWalkable, speedAt, type TerrainGrid } from '../map/grid';
 import { formationOffset, squadCentroid, squadsInOrder, type Dot, type GameState, type Squad } from '../state';
-import { dist, norm, sub, v, type Vec } from '../vec';
+import { dist, distToSegment2, norm, sub, v, type Vec } from '../vec';
 import { rangeFor, threatDirection } from './squad_ai';
 
 // ---------- A* ----------
@@ -317,6 +317,14 @@ function moveBlocked(g: TerrainGrid, dot: Dot, np: Vec, vehicle: boolean): boole
   return false;
 }
 
+/** Movement multiplier from barbed wire at p (1 = clear). */
+export function wireMult(state: GameState, p: Vec, vehicle: boolean): number {
+  for (const w of state.wires) {
+    if (distToSegment2(p, w.a, w.b) <= CONFIG.WIRE_HALF_W ** 2) return vehicle ? CONFIG.WIRE_VEHICLE_MULT : CONFIG.WIRE_SLOW_MULT;
+  }
+  return 1;
+}
+
 export function updateMovement(state: GameState, dt: number): void {
   const g = state.grid;
   for (const squad of squadsInOrder(state)) {
@@ -338,7 +346,7 @@ export function updateMovement(state: GameState, dt: number): void {
         const toC = sub(dot.coverSeek, dot.pos);
         const d = Math.hypot(toC.x, toC.y);
         if (d <= 1.5) { dot.coverSeek = null; continue; }
-        const sp = base * speedAt(g, dot.pos, vehicle) * suppMult;
+        const sp = base * speedAt(g, dot.pos, vehicle) * suppMult * wireMult(state, dot.pos, vehicle);
         const dir = norm(toC);
         dot.moving = true;
         if (!moveBlocked(g, dot, v(dot.pos.x + dir.x * Math.min(d, sp * dt), dot.pos.y + dir.y * Math.min(d, sp * dt)), vehicle)) dot.coverSeek = null;
@@ -358,7 +366,7 @@ export function updateMovement(state: GameState, dt: number): void {
         const toE = sub(tgt.pos, dot.pos);
         const dE = Math.hypot(toE.x, toE.y);
         if (dE <= r + 1 || (!superior && enemyWithin(state, dot, CONFIG.ENGAGE_MIN_DIST))) continue; // +1px hysteresis: no jitter at the boundary
-        const sp = base * speedAt(g, dot.pos, vehicle) * suppMult;
+        const sp = base * speedAt(g, dot.pos, vehicle) * suppMult * wireMult(state, dot.pos, vehicle);
         const dir = norm(toE);
         dot.moving = true;
         dot.facing = Math.atan2(dir.y, dir.x);
@@ -393,7 +401,7 @@ export function updateMovement(state: GameState, dt: number): void {
       }
       anyMoving = true;
       dot.moving = true;
-      const sp = base * speedAt(g, dot.pos, vehicle) * suppMult;
+      const sp = base * speedAt(g, dot.pos, vehicle) * suppMult * wireMult(state, dot.pos, vehicle);
       const stepLen = Math.min(d, sp * dt);
       const dir = norm(toT);
       dot.facing = Math.atan2(dir.y, dir.x);

@@ -67,3 +67,11 @@ Ambiguities resolved while building. Each is the simplest reading of the bible, 
 - Supply Drop cooldown 1:30 → 1:00 (playtest).
 - **Garrisons on owned points** (`GARRISON_ON_OWNED_POINT`): the 100 px rule no longer applies to a point you hold (not the contested one); a garrison sitting on a held point is also exempt from the active-point spawn lock. Placement inside the lock ring is refused ('locked'). Trade-off made real: **tanks and AT gunners now shell visible enemy garrisons** when they have no other target (`TANK_STRUCTURE_DAMAGE`/`AT_STRUCTURE_DAMAGE`, `STRUCTURE_HIT_CHANCE`; garrison hp 300, arty shell 100) — a garrison parked on an objective is a juicy target.
 - **Draft panel relaid** (two-line rows: name + dim note, right-aligned costs — nothing overflows the card). **WB income 25 + 20/pt** (was 15+15). **Dots 2 px.** **Recon role sharpened:** 220 px vision and `RECON_STEALTH_MULT` 0.6 — recon dots are spotted at only 60% of normal range and are not auto-revealed by territory vision even in the open; they are the fog-of-war answer (find garrisons, spot for Barrage/Strafe) rather than a fighting unit (0.7× damage, 4 dots).
+
+## Expansion pass (first-playthrough feedback)
+
+- **Map 1.5× (1800×1200).** An Cuong scaled up (`MAP_SCALE` in map data; scenario/AI coordinates authored on the 1200 base and scaled through helpers). Two new terrain types: **elephant grass** (0.9 speed, conceals, no cover) and **marsh** (0.55 speed, exposed, vehicles cannot enter). Camera fits the map at min zoom 0.65 and starts zoomed out.
+- **Tempo third step:** infantry 33 px/s, recon 37, tank 46.
+- **Deployable defenses** (Orders 7/8/9, WB, own territory): **Barbed wire** (line ≤120px, infantry cross at 25% speed, vehicles crush at 80%, 150hp — blown by shells/HE), **Trench** (line ≤100px, cover-grade for any dot standing in it, flanking bypasses), **Bunker** (16px radius, stronger than cover and flanking does NOT bypass, 400hp — shelled by tanks/AT/arty like garrisons). Earthworks are visible to both sides, always (VisibleState.defenses).
+- **Defender AI counter-attacks** (assault flags on the point when capture progress > 0.2) and **fortifies** (bunker behind the active point, wire across the approach, WB permitting).
+- **Economy:** WB 40 + 25/pt, `START_WB_BONUS` 150 for both sides on top of draft leftover.

@@ -1,6 +1,7 @@
 // Camera + pointer handling. Converts screen → logical → world, drags markers
 // through the CommanderInterface, pans/zooms the camera. No sim mutation here.
 import { CONFIG } from '../config';
+import { AN_CUONG } from '../map/an_cuong';
 import { garrisonPlacementError, type CommanderInterface } from '../commander';
 import type { AbilityKind, GameState, Garrison, MarkerKind, Side, Squad } from '../state';
 import { applyDraftHit, defaultDraft, draftHit, type DraftUi } from './draft';
@@ -9,6 +10,7 @@ import { chipAt, focusSquad } from './roster';
 import { abilityError } from '../systems/abilities';
 import { draftError } from '../systems/draft';
 import { ABILITIES } from '../state';
+import { ABILITY_INFO } from './orders';
 import { clamp, dist, v, type Vec } from '../vec';
 
 export interface Camera { x: number; y: number; zoom: number }
@@ -45,7 +47,7 @@ export const SQUAD_HIT_R = 14; // grabbing a squad by its dots also starts an or
 
 export function createUiState(): UiState {
   return {
-    cam: { x: 0, y: 0, zoom: 1 },
+    cam: { x: 0, y: 0, zoom: CONFIG.CAM_MIN_ZOOM },
     view: { scale: 1, ox: 0, oy: 0, cssW: CONFIG.LOGICAL_W, cssH: CONFIG.LOGICAL_H },
     mouseWorld: null,
     hoverSquadId: null,
@@ -87,10 +89,11 @@ export const screenToWorld = (ui: UiState, s: Vec): Vec => logicalToWorld(ui, sc
 export const worldToLogical = (ui: UiState, w: Vec): Vec => v((w.x - ui.cam.x) * ui.cam.zoom, (w.y - ui.cam.y) * ui.cam.zoom);
 
 export function clampCamera(cam: Camera): void {
+  const mapW = AN_CUONG.width, mapH = AN_CUONG.height;
   cam.zoom = clamp(cam.zoom, CONFIG.CAM_MIN_ZOOM, CONFIG.CAM_MAX_ZOOM);
   const vw = CONFIG.LOGICAL_W / cam.zoom, vh = CONFIG.LOGICAL_H / cam.zoom;
-  cam.x = clamp(cam.x, 0, CONFIG.LOGICAL_W - vw);
-  cam.y = clamp(cam.y, 0, CONFIG.LOGICAL_H - vh);
+  cam.x = clamp(cam.x, 0, Math.max(0, mapW - vw));
+  cam.y = clamp(cam.y, 0, Math.max(0, mapH - vh));
 }
 
 function markerHit(state: GameState, ui: UiState, world: Vec): Squad | null {
@@ -170,10 +173,10 @@ export function attachInput(
       if (e.button === 2) { ui.mode = { kind: 'none' }; return; }
       if (e.button !== 0) return;
       const m = ui.mode;
-      if (m.ability === 'strafe') {
-        if (m.stage === 0) { ui.mode = { kind: 'ability', ability: 'strafe', stage: 1, first: w }; return; }
-        const e2 = abilityError(st, ui.player, 'strafe', m.first!, w);
-        if (e2) toast(ui, PLACEMENT_MSG[e2] ?? e2); else { commanders[ui.player].buyAbility('strafe', m.first!, w); ui.mode = { kind: 'none' }; }
+      if (ABILITY_INFO[m.ability].mode === 'line') { // strafe / wire / trench: two clicks
+        if (m.stage === 0) { ui.mode = { kind: 'ability', ability: m.ability, stage: 1, first: w }; return; }
+        const e2 = abilityError(st, ui.player, m.ability, m.first!, w);
+        if (e2) toast(ui, PLACEMENT_MSG[e2] ?? e2); else { commanders[ui.player].buyAbility(m.ability, m.first!, w); ui.mode = { kind: 'none' }; }
         return;
       }
       const e1 = abilityError(st, ui.player, m.ability, w);
@@ -235,9 +238,9 @@ export function attachInput(
       ui.cam.y = ui.drag.startCam.y - dy;
       clampCamera(ui.cam);
     } else if (ui.drag?.kind === 'marker') {
-      ui.drag.pos = v(clamp(w.x, 0, CONFIG.LOGICAL_W), clamp(w.y, 0, CONFIG.LOGICAL_H));
+      ui.drag.pos = v(clamp(w.x, 0, AN_CUONG.width), clamp(w.y, 0, AN_CUONG.height));
     } else if (ui.drag?.kind === 'garrison') {
-      ui.drag.pos = v(clamp(w.x, 0, CONFIG.LOGICAL_W), clamp(w.y, 0, CONFIG.LOGICAL_H));
+      ui.drag.pos = v(clamp(w.x, 0, AN_CUONG.width), clamp(w.y, 0, AN_CUONG.height));
       ui.drag.moved = true;
     } else {
       const l = screenToLogical(ui, s);

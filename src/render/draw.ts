@@ -3,7 +3,7 @@
 import { CONFIG } from '../config';
 import type { MapData, Shape } from '../map/an_cuong';
 import { inOwnTerritory, sectorLineX, type Dot, type GameState, type Garrison, type Side, type Squad } from '../state';
-import { isCoverAt } from '../map/grid';
+import { concealsAt } from '../map/grid';
 import { spawnLocked } from '../systems/spawning';
 import { garrisonPlacementError } from '../commander';
 import type { UiState } from '../ui/input';
@@ -434,8 +434,38 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
     ctx.fillStyle = '#bfe6ff'; ctx.font = '9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.fillText(`RECON ${Math.ceil(r.t)}s`, r.pos.x, r.pos.y - r.r - 3);
   }
+  // ---- defenses: wire, trenches, bunkers (always visible — big earthworks) ----
+  for (const wr of state.wires) {
+    ctx.strokeStyle = '#7a6a52'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(wr.a.x, wr.a.y); ctx.lineTo(wr.b.x, wr.b.y); ctx.stroke();
+    const L = Math.hypot(wr.b.x - wr.a.x, wr.b.y - wr.a.y), n = Math.max(2, Math.floor(L / 7));
+    const ang = Math.atan2(wr.b.y - wr.a.y, wr.b.x - wr.a.x);
+    ctx.lineWidth = 1; ctx.strokeStyle = '#5d5142';
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, x = wr.a.x + (wr.b.x - wr.a.x) * t, y = wr.a.y + (wr.b.y - wr.a.y) * t;
+      ctx.beginPath(); ctx.moveTo(x - Math.sin(ang) * 3, y + Math.cos(ang) * 3); ctx.lineTo(x + Math.sin(ang) * 3, y - Math.cos(ang) * 3); ctx.stroke();
+    }
+  }
+  for (const tr of state.trenches) {
+    ctx.strokeStyle = 'rgba(66,50,32,0.9)'; ctx.lineWidth = CONFIG.TRENCH_HALF_W * 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(tr.a.x, tr.a.y); ctx.lineTo(tr.b.x, tr.b.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(30,22,14,0.9)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(tr.a.x, tr.a.y); ctx.lineTo(tr.b.x, tr.b.y); ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
+  for (const bk of state.bunkers) {
+    const col = sideColor(bk.side);
+    ctx.fillStyle = '#4b463c'; ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+    ctx.fillRect(bk.pos.x - 8, bk.pos.y - 6, 16, 12); ctx.strokeRect(bk.pos.x - 8 + 0.5, bk.pos.y - 6 + 0.5, 15, 11);
+    ctx.fillStyle = '#151310'; ctx.fillRect(bk.pos.x - 5, bk.pos.y - 2, 10, 3); // firing slit
+    if (bk.hp < CONFIG.BUNKER_HP) { // damage bar
+      ctx.fillStyle = '#000'; ctx.fillRect(bk.pos.x - 8, bk.pos.y - 11, 16, 3);
+      ctx.fillStyle = C.alarm; ctx.fillRect(bk.pos.x - 8, bk.pos.y - 11, 16 * (bk.hp / CONFIG.BUNKER_HP), 3);
+    }
+  }
   for (const sp of state.supplies) {
-    if (sp.side !== me && !ui.revealAll && !(inOwnTerritory(state, me, sp.pos) && !isCoverAt(state.grid, sp.pos))) continue;
+    if (sp.side !== me && !ui.revealAll && !(inOwnTerritory(state, me, sp.pos) && !concealsAt(state.grid, sp.pos))) continue;
     ctx.save(); ctx.translate(sp.pos.x, sp.pos.y);
     ctx.fillStyle = C.supply; ctx.fillRect(-5, -5, 10, 10); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(-5, -5, 10, 10);
     ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(5, 5); ctx.moveTo(5, -5); ctx.lineTo(-5, 5); ctx.stroke();
@@ -491,6 +521,20 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
         ctx.globalAlpha = 0.25; ctx.fillStyle = C.strafe;
         ctx.beginPath(); ctx.moveTo(a.x + nx, a.y + ny); ctx.lineTo(b.x + nx, b.y + ny); ctx.lineTo(b.x - nx, b.y - ny); ctx.lineTo(a.x - nx, a.y - ny); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
       }
+    } else if (m.ability === 'wire' || m.ability === 'trench') {
+      const maxL = m.ability === 'wire' ? CONFIG.WIRE_MAX_LENGTH : CONFIG.TRENCH_MAX_LENGTH;
+      ctx.strokeStyle = m.ability === 'wire' ? '#7a6a52' : 'rgba(66,50,32,0.95)';
+      if (m.stage === 0) { ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.stroke(); }
+      else {
+        const a = m.first!; let b = p; const L = dist(a, b);
+        if (L > maxL) b = v(a.x + ((b.x - a.x) * maxL) / L, a.y + ((b.y - a.y) * maxL) / L);
+        ctx.lineWidth = m.ability === 'trench' ? CONFIG.TRENCH_HALF_W * 2 : 2; ctx.globalAlpha = 0.7;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1;
+      }
+    } else if (m.ability === 'bunker') {
+      ctx.strokeStyle = '#c8bfa5';
+      ctx.strokeRect(p.x - 8, p.y - 6, 16, 12);
+      ctx.beginPath(); ctx.arc(p.x, p.y, CONFIG.BUNKER_R, 0, Math.PI * 2); ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([]);
     } else if (m.ability === 'supply') {
       ctx.strokeStyle = C.supply;
       ctx.beginPath(); ctx.arc(p.x, p.y, CONFIG.SUPPLY_RADIUS, 0, Math.PI * 2); ctx.stroke();

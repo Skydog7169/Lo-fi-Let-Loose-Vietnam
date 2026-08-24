@@ -9,7 +9,7 @@ export const CONFIG = {
   MAX_FRAME_DT: 0.25, // seconds; clamp spiral-of-death
 
   // ---- Camera ----
-  CAM_MIN_ZOOM: 1,
+  CAM_MIN_ZOOM: 0.65, // fits the 1800x1200 map in the 1200x800 view
   CAM_MAX_ZOOM: 4,
   CAM_WHEEL_ZOOM_STEP: 1.1, // multiplicative per wheel notch
 
@@ -31,6 +31,8 @@ export const CONFIG = {
     open: 1.0,
     woods: 0.7,
     village: 0.85,
+    grass: 0.9, // elephant grass: conceals, no cover
+    marsh: 0.55, // flooded ground: slow, exposed, impassable to vehicles
     river: 0, // impassable
     road: 1.0, // infantry; vehicles use ROAD_VEHICLE_SPEED
     bridge: 1.0,
@@ -42,6 +44,20 @@ export const CONFIG = {
     open: false,
     woods: true,
     village: true,
+    grass: false, // grass hides you but does not stop bullets
+    marsh: false,
+    river: false,
+    road: false,
+    bridge: false,
+    ford: false,
+    hq: false,
+  } as Record<string, boolean>,
+  TERRAIN_CONCEALS: {
+    open: false,
+    woods: true,
+    village: true,
+    grass: true, // the infiltration terrain: invisible until close, but no protection
+    marsh: false,
     river: false,
     road: false,
     bridge: false,
@@ -50,10 +66,10 @@ export const CONFIG = {
   } as Record<string, boolean>,
 
   // ---- Units ----
-  // tempo: slowed ~15% from the first cut (playtest: 'slow the speed of play down some')
-  INFANTRY_SPEED: 38, // px/s at 100% terrain
-  RECON_SPEED: 42,
-  TANK_SPEED: 52,
+  // tempo: slowed twice from the first cut (playtest: 'slow the speed of play down')
+  INFANTRY_SPEED: 33, // px/s at 100% terrain
+  RECON_SPEED: 37,
+  TANK_SPEED: 46,
   SQUAD_SIZE: { infantry: 6, at: 6, recon: 4, tank: 1, artillery: 1 } as Record<string, number>,
   DOT_HP: 100,
   TANK_HP: 600,
@@ -181,7 +197,8 @@ export const CONFIG = {
 
   // ---- Economy (bible §7), per minute ----
   // base up / per-point down vs the bible so holding 4 points does not out-reinforce the attacker 2:1
-  WB_BASE: 25, WB_PER_POINT: 20,
+  WB_BASE: 40, WB_PER_POINT: 25,
+  START_WB_BONUS: 150, // flat WB granted to both sides at match start, on top of draft leftover
   MUN_BASE: 70, MUN_PER_POINT: 15,
   MAN_BASE: 80, MAN_PER_POINT: 15,
   FUEL_BASE: 70, FUEL_PER_POINT: 15,
@@ -208,7 +225,24 @@ export const CONFIG = {
     supply: { cost: 100, pool: 'fuel', cooldown: 60 },
     garrison: { cost: 200, pool: 'wb', cooldown: 120 },
     redeploy: { cost: 75, pool: 'wb', cooldown: 60 },
+    wire: { cost: 50, pool: 'wb', cooldown: 30 },
+    trench: { cost: 75, pool: 'wb', cooldown: 45 },
+    bunker: { cost: 150, pool: 'wb', cooldown: 90 },
   } as Record<string, { cost: number; pool: 'wb' | 'mun' | 'man' | 'fuel'; cooldown: number }>,
+  // ---- Deployable defenses (playtest addition) ----
+  WIRE_MAX_LENGTH: 120,
+  WIRE_SLOW_MULT: 0.25, // infantry crossing wire move at this fraction (vehicles crush it at 0.8)
+  WIRE_VEHICLE_MULT: 0.8,
+  WIRE_HALF_W: 4,
+  WIRE_HP: 150, // destroyed by arty shells / tank HE splash
+  TRENCH_MAX_LENGTH: 100,
+  TRENCH_HALF_W: 6,
+  TRENCH_HIT_MULT: 0.6, // cover-grade protection for any dot in the trench (either side); flanking bypasses
+  TRENCH_DMG_MULT: 0.7,
+  BUNKER_R: 16, // friendly dots this close to the bunker fight from it
+  BUNKER_HIT_MULT: 0.45, // stronger than cover, and flanking does NOT bypass it
+  BUNKER_DMG_MULT: 0.6,
+  BUNKER_HP: 400, // shelled by tanks/AT/arty like a garrison
   RECON_RADIUS: 200,
   RECON_DURATION: 30,
   STRAFE_MAX_LENGTH: 320,

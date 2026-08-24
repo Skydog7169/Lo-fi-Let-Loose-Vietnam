@@ -14,3 +14,13 @@ export const norm = (a: Vec): Vec => {
 export const angleOf = (a: Vec): number => Math.atan2(a.y, a.x);
 export const fromAngle = (t: number, r = 1): Vec => ({ x: Math.cos(t) * r, y: Math.sin(t) * r });
 export const clamp = (x: number, lo: number, hi: number): number => (x < lo ? lo : x > hi ? hi : x);
+
+/** Squared distance from p to segment ab. */
+export function distToSegment2(p: Vec, a: Vec, b: Vec): number {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const l2 = dx * dx + dy * dy;
+  let t = l2 > 0 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const qx = a.x + t * dx, qy = a.y + t * dy;
+  return (p.x - qx) ** 2 + (p.y - qy) ** 2;
+}

@@ -1,6 +1,7 @@
 // Named starting setups. 'default' is the placeholder match; the others are the
 // Phase 2 verification scenes from CLAUDE.md. Select with ?scenario=name.
 import { CONFIG } from './config';
+import { AN_CUONG } from './map/an_cuong';
 import { createEmptyState, createGarrison, createSquad, type GameState, type MarkerKind, type Side, type SquadKind } from './state';
 import { v, type Vec } from './vec';
 import { applyDraft } from './systems/draft';
@@ -12,9 +13,15 @@ function combatOnly(s: GameState): void {
   s.rules.respawn = false;
 }
 
-function garrison(s: GameState, side: Side, x: number, y: number) { return createGarrison(s, side, v(x, y)); }
+function garrison(s: GameState, side: Side, x: number, y: number) { return createGarrison(s, side, sc(v(x, y))); }
+
+// Scenario coordinates are authored on the original 1200×800 map; scale to the shipped map.
+const SK = AN_CUONG.width / 1200;
+const sc = (p: Vec): Vec => v(p.x * SK, p.y * SK);
 
 function place(state: GameState, side: Side, kind: SquadKind, label: string, pos: Vec, marker?: { kind: MarkerKind; pos: Vec }) {
+  pos = sc(pos);
+  if (marker) marker = { kind: marker.kind, pos: sc(marker.pos) };
   const sq = createSquad(state, side, kind, label, pos);
   if (marker) sq.marker = { kind: marker.kind, pos: v(marker.pos.x, marker.pos.y) };
   return sq;
@@ -54,7 +61,7 @@ export const SCENARIOS: Record<string, (s: GameState) => void> = {
   optouch(s) {
     s.phase = 'play';
     const p = place(s, 'PAVN', 'infantry', 'A', v(300, 520), { kind: 'defend', pos: v(300, 520) });
-    p.op = v(300, 520);
+    p.op = sc(v(300, 520));
     garrison(s, 'PAVN', 700, 560);
     place(s, 'US', 'infantry', 'A', v(120, 520), { kind: 'attack', pos: v(300, 520) });
     place(s, 'US', 'infantry', 'B', v(120, 560), { kind: 'attack', pos: v(300, 560) });
@@ -81,7 +88,8 @@ export const SCENARIOS: Record<string, (s: GameState) => void> = {
   win_capture(s) {
     s.phase = 'play';
     garrison(s, 'US', 60, 560); garrison(s, 'PAVN', 1150, 300);
-    for (const p of s.map.points) place(s, 'US', 'infantry', String(p.id), v(p.pos.x, p.pos.y), { kind: 'defend', pos: v(p.pos.x, p.pos.y) });
+    // p.pos is already in map coordinates; place() scales, so pass base coords
+    for (const p of s.map.points) { const b = v(p.pos.x / SK, p.pos.y / SK); place(s, 'US', 'infantry', String(p.id), b, { kind: 'defend', pos: b }); }
     place(s, 'PAVN', 'infantry', 'A', v(1150, 400), { kind: 'defend', pos: v(1150, 400) });
   },
   /** Nobody does anything → PAVN wins at time-out. */

@@ -14,6 +14,7 @@ export interface TerrainGrid {
   /** vehicle time-cost per cell */
   vehCost: Float32Array;
   cover: Uint8Array;
+  conceal: Uint8Array;
 }
 
 export function buildTerrainGrid(map: MapData): TerrainGrid {
@@ -24,6 +25,7 @@ export function buildTerrainGrid(map: MapData): TerrainGrid {
   const infCost = new Float32Array(cols * rows);
   const vehCost = new Float32Array(cols * rows);
   const cover = new Uint8Array(cols * rows);
+  const conceal = new Uint8Array(cols * rows);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const i = r * cols + c;
@@ -31,12 +33,13 @@ export function buildTerrainGrid(map: MapData): TerrainGrid {
       terrain[i] = t;
       const sp = CONFIG.TERRAIN_SPEED[t] ?? 1;
       infCost[i] = sp > 0 ? 1 / sp : Infinity;
-      const vsp = t === 'road' ? CONFIG.ROAD_VEHICLE_SPEED : sp;
+      const vsp = t === 'road' ? CONFIG.ROAD_VEHICLE_SPEED : t === 'marsh' ? 0 : sp;
       vehCost[i] = vsp > 0 ? 1 / vsp : Infinity;
       cover[i] = CONFIG.TERRAIN_IS_COVER[t] ? 1 : 0;
+      conceal[i] = CONFIG.TERRAIN_CONCEALS[t] ? 1 : 0;
     }
   }
-  return { cell, cols, rows, terrain, infCost, vehCost, cover };
+  return { cell, cols, rows, terrain, infCost, vehCost, cover, conceal };
 }
 
 export const cellOf = (g: TerrainGrid, p: Vec): { c: number; r: number } => ({
@@ -55,6 +58,7 @@ export const isWalkable = (g: TerrainGrid, p: Vec, vehicle = false): boolean => 
   return cost !== Infinity;
 };
 export const isCoverAt = (g: TerrainGrid, p: Vec): boolean => g.cover[cellIndex(g, p)] === 1;
+export const concealsAt = (g: TerrainGrid, p: Vec): boolean => g.conceal[cellIndex(g, p)] === 1;
 /** Movement speed multiplier at a world point. */
 export const speedAt = (g: TerrainGrid, p: Vec, vehicle = false): number => {
   const cost = (vehicle ? g.vehCost : g.infCost)[cellIndex(g, p)] ?? Infinity;

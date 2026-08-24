@@ -1,7 +1,7 @@
 // Per-squad state machine (MOVING → ENGAGING → SUPPRESSED → FALLBACK) and
 // per-dot target acquisition. Identical for both sides (bible §10.1).
 import { CONFIG } from '../config';
-import { cellCenter, cellOf, isCoverAt, isWalkable } from '../map/grid';
+import { cellCenter, cellOf, concealsAt, isCoverAt, isWalkable } from '../map/grid';
 import { aliveDots, isVehicle, type Dot, type GameState, type Side, type Squad } from '../state';
 import { dist2, norm, sub, v, type Vec } from '../vec';
 import { rand } from '../rng';
@@ -33,7 +33,7 @@ export function canSpot(state: GameState, shooter: Dot, target: Dot, d2: number)
   const vis = state.vis[shooter.side].dotVisible;
   if (vis.length > target.id && vis[target.id] !== 1 && !CONFIG.DEBUG_REVEAL_ALL) return false;
   const ss = state.squads[shooter.squadId]!;
-  if (ss.kind === 'tank' && isCoverAt(state.grid, target.pos)) return d2 <= CONFIG.TANK_COVER_SPOT_RANGE ** 2;
+  if (ss.kind === 'tank' && concealsAt(state.grid, target.pos)) return d2 <= CONFIG.TANK_COVER_SPOT_RANGE ** 2;
   return true;
 }
 

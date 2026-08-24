@@ -36,7 +36,7 @@ export function applyDraft(state: GameState, side: Side, comp: Record<SquadKind,
   for (let i = 0; i < (comp.recon ?? 0); i++) createSquad(state, side, 'recon', labels[li++]!, slotPos());
   for (let i = 0; i < (comp.tank ?? 0); i++) createSquad(state, side, 'tank', `T${i + 1}`, v(c.x + (side === 'US' ? 28 : -28), c.y - 30 + i * 40));
   for (let i = 0; i < (comp.artillery ?? 0); i++) createSquad(state, side, 'artillery', 'G', v(c.x + (side === 'US' ? -30 : 30), hq.y + hq.h - 16));
-  state.res[side].wb = budget - draftCost(comp);
+  state.res[side].wb = budget - draftCost(comp) + CONFIG.START_WB_BONUS;
   state.drafted[side] = true;
   return true;
 }

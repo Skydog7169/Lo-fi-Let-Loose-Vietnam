@@ -61,7 +61,7 @@ export function profilePaths(n = 50): { msPerPath: number; avgLen: number } {
   const t0 = performance.now();
   let len = 0;
   for (let i = 0; i < n; i++) {
-    const p = findPath(st.grid, { x: 60 + (i % 7) * 10, y: 300 + (i % 11) * 20 }, { x: 1100 - (i % 5) * 15, y: 200 + (i % 13) * 30 });
+    const p = findPath(st.grid, { x: 90 + (i % 7) * 15, y: 450 + (i % 11) * 30 }, { x: 1650 - (i % 5) * 22, y: 300 + (i % 13) * 45 });
     len += p.length;
   }
   return { msPerPath: (performance.now() - t0) / n, avgLen: len / n };
@@ -87,18 +87,19 @@ export function runPhase3Checks(seed = 1): Check[] {
     const pav = st.squads.find((s) => s.side === 'PAVN')!;
     const tTouch = run(st, 150, (s) => s.squads[pav.id]!.op === null);
     push('OP deleted on enemy touch', tTouch >= 0, `deleted at ${tTouch.toFixed(1)}s`);
-    // kill the PAVN squad outright, then wait for a wave: it should come back at the garrison (700,560), not the OP
+    // kill the PAVN squad outright, then wait for a wave: it should come back at the garrison (scaled 700,560), not the OP
     for (const id of pav.dotIds) { const d = st.dots[id]!; d.alive = false; d.hp = 0; }
     st.waveTimer.PAVN = 0.5;
     run(st, 5, (s) => pav.dotIds.some((id) => s.dots[id]!.alive));
     const back = pav.dotIds.map((id) => st.dots[id]!).filter((d) => d.alive);
-    const nearGar = back.length > 0 && back.every((d) => Math.hypot(d.pos.x - 700, d.pos.y - 560) < 40);
+    const MK = st.map.width / 1200;
+    const nearGar = back.length > 0 && back.every((d) => Math.hypot(d.pos.x - 700 * MK, d.pos.y - 560 * MK) < 40);
     push('squad without OP respawns at nearest garrison', nearGar, `${back.length} alive, first at ${back[0] ? `${back[0].pos.x | 0},${back[0].pos.y | 0}` : '—'}`);
   }
   // 2. garrison camping
   {
     const st = createInitialState(seed, 'garrisoncamp');
-    const g = st.garrisons.find((x) => x.side === 'PAVN' && x.pos.x === 360)!;
+    const g = st.garrisons.find((x) => x.side === 'PAVN' && x.pos.x === 360 * (st.map.width / 1200))!;
     const tDis = run(st, 60, (s) => s.garrisons[g.id]!.disabled);
     const tDes = run(st, 60, (s) => s.garrisons[g.id]!.state === 'destroyed');
     push('garrison disabled by nearby enemy', tDis >= 0, `disabled at ${tDis.toFixed(1)}s`);
@@ -117,19 +118,20 @@ export function runPhase3Checks(seed = 1): Check[] {
       const vis = s.vis.US.dotVisible;
       const anyVisible = alive.some((d) => vis[d.id] === 1);
       const cy = alive.reduce((a, d) => a + d.pos.y, 0) / alive.length;
-      if (cy < 120) { samplesWoods++; if (anyVisible) seenInWoods = true; }
-      if (cy > 185 && cy < 260) { samplesOpen++; if (anyVisible) seenInOpen = true; }
-      return cy > 260;
+      const MK2 = s.map.width / 1200;
+      if (cy < 120 * MK2) { samplesWoods++; if (anyVisible) seenInWoods = true; }
+      if (cy > 185 * MK2 && cy < 260 * MK2) { samplesOpen++; if (anyVisible) seenInOpen = true; }
+      return cy > 260 * MK2;
     });
     push('squad in woods invisible inside our territory', samplesWoods > 0 && !seenInWoods, `${samplesWoods} samples in woods, seen=${seenInWoods}`);
     push('squad visible once it exits the trees', samplesOpen > 0 && seenInOpen, `${samplesOpen} samples in open, seen=${seenInOpen}`);
-    push('sector line at start', Math.abs(sectorLineX(st) - 160) < 1, `x=${sectorLineX(st)}`);
+    push('sector line at start', Math.abs(sectorLineX(st) - 160 * (st.map.width / 1200)) < 1, `x=${sectorLineX(st)}`);
   }
   // 4. win by capture
   {
     const st = createInitialState(seed, 'win_capture');
     const t0 = st.timer;
-    const t = run(st, 400, (s) => s.phase === 'ended');
+    const t = run(st, 700, (s) => s.phase === 'ended');
     push('US wins by capturing point 5', st.result?.winner === 'US' && (st.result?.reason ?? '').includes('point 5'), `${JSON.stringify(st.result)} at ${t.toFixed(0)}s`);
     push('captures add +3:00 each', Math.abs(st.timer - (t0 - t + 5 * CONFIG.CAPTURE_BONUS_SECONDS)) < 2, `timer ${st.timer.toFixed(0)} (start ${t0}, elapsed ${t.toFixed(0)})`);
     push('sector line advanced past the map', sectorLineX(st) >= st.map.width, `x=${sectorLineX(st)}`);
@@ -184,7 +186,7 @@ export function runAiMatch(seed: number, maxSeconds = 20 * 60, opts: { passiveUs
     if (opts.passiveUs) {
       // a human who drafts, places garrisons and then does nothing
       if (st.phase === 'draft' && !st.drafted.US) cmds.US.draft({ infantry: 4, at: 1, recon: 0, tank: 1, artillery: 0 });
-      if (st.phase === 'setup' && !usSetup) { cmds.US.placeGarrison({ x: 60, y: 300 }); cmds.US.placeGarrison({ x: 60, y: 520 }); cmds.US.placeGarrison({ x: 130, y: 300 }); cmds.US.setupDone(); usSetup = true; }
+      if (st.phase === 'setup' && !usSetup) { cmds.US.placeGarrison({ x: 90, y: 450 }); cmds.US.placeGarrison({ x: 90, y: 780 }); cmds.US.placeGarrison({ x: 195, y: 450 }); cmds.US.setupDone(); usSetup = true; }
     }
     opts.onTick?.(st);
     for (const c of st.pendingCommands) if (c.type === 'ability') bought[`${c.side}:${c.ability}`] = (bought[`${c.side}:${c.ability}`] ?? 0) + 1;

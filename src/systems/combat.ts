@@ -3,8 +3,8 @@
 import { CONFIG } from '../config';
 import { isCoverAt } from '../map/grid';
 import { rand } from '../rng';
-import { isVehicle, pushEffect, squadsInOrder, type Dot, type Garrison, type GameState, type Squad } from '../state';
-import { angleOf, dist2, fromAngle, sub, v, type Vec } from '../vec';
+import { isVehicle, pushEffect, squadsInOrder, type Bunker, type Dot, type Garrison, type GameState, type Squad } from '../state';
+import { angleOf, dist2, distToSegment2, fromAngle, sub, v, type Vec } from '../vec';
 import { isAtGunner } from './squad_ai';
 
 interface Weapon { interval: number; hit: number; dmg: number }
@@ -75,7 +75,21 @@ export function heImpact(state: GameState, p: Vec, side: 'US' | 'PAVN'): void {
     }
     if (d.alive && d2 <= ur2) d.suppression = Math.min(1, d.suppression + CONFIG.TANK_HE_SUPPRESS);
   }
+  damageStructures(state, p, CONFIG.TANK_HE_DAMAGE, CONFIG.TANK_HE_SPLASH_R);
   pushEffect(state, { kind: 'impact', pos: v(p.x, p.y), r: CONFIG.TANK_HE_SPLASH_R * 0.8, ttl: CONFIG.IMPACT_TTL * 0.8, max: CONFIG.IMPACT_TTL * 0.8 });
+}
+
+/** Explosions chew through wire and bunkers. */
+function damageStructures(state: GameState, p: Vec, dmg: number, r: number): void {
+  const r2 = r * r;
+  for (let i = state.wires.length - 1; i >= 0; i--) {
+    const w = state.wires[i]!;
+    if (distToSegment2(p, w.a, w.b) <= r2) { w.hp -= dmg; if (w.hp <= 0) state.wires.splice(i, 1); }
+  }
+  for (let i = state.bunkers.length - 1; i >= 0; i--) {
+    const b = state.bunkers[i]!;
+    if (dist2(b.pos, p) <= r2) { b.hp -= dmg; if (b.hp <= 0) { state.bunkers.splice(i, 1); pushEffect(state, { kind: 'impact', pos: v(b.pos.x, b.pos.y), r: 14, ttl: CONFIG.IMPACT_TTL, max: CONFIG.IMPACT_TTL }); } }
+  }
 }
 
 function shoot(state: GameState, shooter: Dot, target: Dot): void {
@@ -85,10 +99,14 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
   const w = weaponFor(state, shooter, target);
   const flank = isFlanking(shooter, target);
   const covered = !targetVehicle && isCoverAt(state.grid, target.pos) && !flank;
-  const dug = !targetVehicle && !covered && !!target.dugIn && !flank; // entrenched in the open: cover-like, still visible
+  const bunkered = !targetVehicle && inFriendlyBunker(state, target); // enclosed: flanking does not bypass
+  const trenched = !targetVehicle && !covered && !bunkered && !flank && inTrench(state, target.pos);
+  const dug = !targetVehicle && !covered && !bunkered && !trenched && !!target.dugIn && !flank;
   let hit = w.hit * (1 - CONFIG.SUPPRESS_ACC_MULT_MAX * shooter.suppression);
   let dmg = w.dmg;
-  if (covered) { hit *= CONFIG.COVER_HIT_MULT; dmg *= CONFIG.COVER_DMG_MULT; }
+  if (bunkered) { hit *= CONFIG.BUNKER_HIT_MULT; dmg *= CONFIG.BUNKER_DMG_MULT; }
+  else if (covered) { hit *= CONFIG.COVER_HIT_MULT; dmg *= CONFIG.COVER_DMG_MULT; }
+  else if (trenched) { hit *= CONFIG.TRENCH_HIT_MULT; dmg *= CONFIG.TRENCH_DMG_MULT; }
   else if (dug) { hit *= CONFIG.DIG_IN_HIT_MULT; dmg *= CONFIG.DIG_IN_DMG_MULT; }
   if (!targetVehicle) {
     // weight of fire: pinned men are easier to hit; shaken (outnumbered + pinned) men more so
@@ -141,6 +159,7 @@ export function shellImpact(state: GameState, p: Vec): void {
   }
   // spawns: OPs are deleted by a near hit, garrisons lose hp and die after a few
   for (const sq of state.squads) if (sq.op && dist2(sq.op, p) <= sr2) sq.op = null;
+  damageStructures(state, p, CONFIG.SHELL_SPAWN_DAMAGE, Math.sqrt(sr2));
   for (const g of state.garrisons) {
     if (g.state === 'destroyed' || dist2(g.pos, p) > sr2) continue;
     g.hp -= CONFIG.SHELL_SPAWN_DAMAGE;
@@ -149,17 +168,32 @@ export function shellImpact(state: GameState, p: Vec): void {
   pushEffect(state, { kind: 'impact', pos: v(p.x, p.y), r: CONFIG.ARTY_SPLASH_R, ttl: CONFIG.IMPACT_TTL, max: CONFIG.IMPACT_TTL });
 }
 
-/** Tanks and AT gunners with nothing else to shoot engage a visible enemy garrison in range. */
+export function inTrench(state: GameState, p: Vec): boolean {
+  for (const t of state.trenches) if (distToSegment2(p, t.a, t.b) <= CONFIG.TRENCH_HALF_W ** 2) return true;
+  return false;
+}
+
+function inFriendlyBunker(state: GameState, d: Dot): boolean {
+  for (const b of state.bunkers) if (b.side === d.side && dist2(b.pos, d.pos) <= CONFIG.BUNKER_R ** 2) return true;
+  return false;
+}
+
+/** Tanks and AT gunners with nothing else to shoot engage a visible enemy garrison or bunker in range. */
 function shootStructure(state: GameState, squad: Squad, d: Dot): void {
   if (d.fireCooldown > 0) return;
   const vis = state.vis[d.side];
   const range = squad.kind === 'tank' ? CONFIG.TANK_RANGE : CONFIG.AT_RANGE_VS_ARMOR;
-  let best: Garrison | null = null, bd = range * range;
+  let best: Garrison | Bunker | null = null, bd = range * range;
   for (const g of state.garrisons) {
     if (g.side === d.side || g.state === 'destroyed') continue;
     if (!(vis.garrisonVisible.length > g.id && vis.garrisonVisible[g.id])) continue;
     const d2 = dist2(g.pos, d.pos);
     if (d2 <= bd) { bd = d2; best = g; }
+  }
+  for (const b of state.bunkers) {
+    if (b.side === d.side || b.hp <= 0) continue;
+    const d2 = dist2(b.pos, d.pos);
+    if (d2 <= bd) { bd = d2; best = b; }
   }
   if (!best) return;
   const tank = squad.kind === 'tank';
@@ -169,7 +203,11 @@ function shootStructure(state: GameState, squad: Squad, d: Dot): void {
   const landed = rand(state.rng) < CONFIG.STRUCTURE_HIT_CHANCE;
   if (landed) {
     best.hp -= tank ? CONFIG.TANK_STRUCTURE_DAMAGE : CONFIG.AT_STRUCTURE_DAMAGE;
-    if (best.hp <= 0) { best.state = 'destroyed'; best.disabled = false; state.stats[best.side].garrisonsLost++; }
+    if (best.hp <= 0) {
+      if ('state' in best) { best.state = 'destroyed'; best.disabled = false; state.stats[best.side].garrisonsLost++; }
+      else state.bunkers.splice(state.bunkers.indexOf(best), 1);
+      pushEffect(state, { kind: 'impact', pos: v(best.pos.x, best.pos.y), r: 14, ttl: CONFIG.IMPACT_TTL, max: CONFIG.IMPACT_TTL });
+    }
   }
   const end = landed ? v(best.pos.x, best.pos.y) : v(best.pos.x + (rand(state.rng) - 0.5) * 16, best.pos.y + (rand(state.rng) - 0.5) * 16);
   pushEffect(state, { kind: 'tracer', a: v(d.pos.x, d.pos.y), b: end, side: d.side, ttl: CONFIG.TRACER_TTL * 1.5, max: CONFIG.TRACER_TTL * 1.5 });

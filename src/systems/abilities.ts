@@ -39,7 +39,24 @@ export function abilityError(state: GameState, side: Side, ability: AbilityKind,
       if (e === 'territory' || e === 'point' || e === 'terrain') return e;
       return null;
     }
+    case 'wire':
+    case 'trench':
+      if (!pos2) return 'target';
+      if (!inOwnTerritory(state, side, pos) || !inOwnTerritory(state, side, pos2)) return 'territory';
+      if (!isWalkable(state.grid, pos) || !isWalkable(state.grid, pos2)) return 'terrain';
+      return null;
+    case 'bunker':
+      if (!inOwnTerritory(state, side, pos)) return 'territory';
+      if (!isWalkable(state.grid, pos)) return 'terrain';
+      return null;
   }
+}
+
+/** Clamp a defense line to its configured max length. */
+function clampLine(a: Vec, b: Vec, maxLen: number): Vec {
+  const L = dist(a, b);
+  if (L <= maxLen) return b;
+  return v(a.x + ((b.x - a.x) * maxLen) / L, a.y + ((b.y - a.y) * maxLen) / L);
 }
 
 /** Apply a validated purchase. */
@@ -71,6 +88,15 @@ export function buyAbility(state: GameState, side: Side, ability: AbilityKind, p
       createGarrison(state, side, pos);
       // the drop is consumed
       for (let i = state.supplies.length - 1; i >= 0; i--) { const s = state.supplies[i]!; if (s.side === side && dist(s.pos, pos) <= CONFIG.SUPPLY_RADIUS) { state.supplies.splice(i, 1); break; } }
+      break;
+    case 'wire':
+      state.wires.push({ side, a: v(pos.x, pos.y), b: clampLine(pos, pos2!, CONFIG.WIRE_MAX_LENGTH), hp: CONFIG.WIRE_HP });
+      break;
+    case 'trench':
+      state.trenches.push({ side, a: v(pos.x, pos.y), b: clampLine(pos, pos2!, CONFIG.TRENCH_MAX_LENGTH) });
+      break;
+    case 'bunker':
+      state.bunkers.push({ side, pos: v(pos.x, pos.y), hp: CONFIG.BUNKER_HP });
       break;
     case 'redeploy': {
       const g = state.garrisons[garrisonId!]!;
