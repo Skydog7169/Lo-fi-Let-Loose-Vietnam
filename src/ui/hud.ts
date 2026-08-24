@@ -6,6 +6,7 @@ import { incomePerMinute } from '../systems/economy';
 import { fmtTime } from '../systems/match';
 import { dotsOnActivePoint } from '../systems/capture';
 import { ownedGarrisons } from '../systems/spawning';
+import { ABILITY_INFO } from './orders';
 import type { UiState } from './input';
 import { sideColor } from '../render/draw';
 
@@ -33,10 +34,12 @@ function drawTopBar(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState
   for (let i = 0; i < state.points.length; i++) {
     const ps = state.points[i]!;
     const x = x0 + i * (bw + gap), y = 9;
-    ctx.fillStyle = ps.owner === 'US' ? C.us : C.pavn; ctx.globalAlpha = i === state.active ? 1 : 0.55; ctx.fillRect(x, y, bw, bh); ctx.globalAlpha = 1;
+    ctx.fillStyle = ps.owner === 'US' ? C.us : ps.owner === 'PAVN' ? C.pavn : '#6b6b62'; // gray = neutral
+    ctx.globalAlpha = i === state.active ? 1 : 0.55; ctx.fillRect(x, y, bw, bh); ctx.globalAlpha = 1;
     if (i === state.active) {
-      // progress fill
-      ctx.fillStyle = C.us; ctx.fillRect(x, y, bw * ps.progress, bh);
+      // signed progress fill: US capture grows from the left in blue, PAVN from the right in red
+      if (ps.progress > 0) { ctx.fillStyle = C.us; ctx.fillRect(x, y, bw * ps.progress, bh); }
+      else if (ps.progress < 0) { const w2 = bw * -ps.progress; ctx.fillStyle = C.pavn; ctx.fillRect(x + bw - w2, y, w2, bh); }
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x - 1, y - 1, bw + 2, bh + 2);
     } else {
       // lock glyph for points behind the front / not yet reachable
@@ -82,9 +85,14 @@ function sectorX(state: GameState): number {
 function drawBottom(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState, fps: number): void {
   const W = CONFIG.LOGICAL_W, H = CONFIG.LOGICAL_H;
   ctx.fillStyle = C.hudBg; ctx.fillRect(0, H - 22, W, 22);
-  const modeTxt = ui.mode.kind === 'placeGarrison' ? '  [PLACING GARRISON — click to place, right-click/Esc cancel]' : ui.mode.kind === 'redeploy' ? '  [REDEPLOY — click new spot, Esc cancel]' : '';
-  text(ctx, `tick ${state.tick}  fps ${fps.toFixed(0)}  zoom ${ui.cam.zoom.toFixed(2)}${ui.revealAll ? '  [REVEAL ALL]' : ''}${modeTxt}`, 8, H - 11, C.hudDim, '10px monospace');
-  text(ctx, 'drag squad/flag: attack   right-drag: defend   drag garrison: move   orange tracers = flanking fire (ignores cover)   1–9: orders   G: garrison', W - 8, H - 11, C.hudDim, '10px monospace', 'right');
+  const modeTxt = ui.mode.kind === 'placeGarrison' ? '  [PLACING GARRISON — click to place · right-click cancels]'
+    : ui.mode.kind === 'redeploy' ? '  [REDEPLOY — click new spot · right-click cancels]'
+    : ui.mode.kind === 'pickGarrison' ? '  [REDEPLOY — click one of your garrisons]'
+    : ui.mode.kind === 'ability' ? `  [${ABILITY_INFO[ui.mode.ability].name}${ABILITY_INFO[ui.mode.ability].mode === 'line' ? ui.mode.stage === 0 ? ' — click start point' : ' — click end point' : ' — click target'} · right-click cancels]`
+    : '';
+  text(ctx, `tick ${state.tick}  fps ${fps.toFixed(0)}  zoom ${ui.cam.zoom.toFixed(2)}${ui.revealAll ? '  [REVEAL ALL]' : ''}${modeTxt}`, 8, H - 11, modeTxt ? '#f2d27a' : C.hudDim, '10px monospace');
+  // the controls reference yields to an active mode hint — the two lines share the bar
+  if (!modeTxt) text(ctx, 'drag squad/flag: attack · right-drag: defend · drag garrison: move · orange = flank fire · 1–9: orders · G: garrison', W - 8, H - 11, C.hudDim, '10px monospace', 'right');
 
 }
 
