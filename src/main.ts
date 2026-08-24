@@ -21,6 +21,8 @@ const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed') ?? 1);
 const scenario = params.get('scenario') ?? CONFIG.SCENARIO;
 if (params.get('setup') === '0') (CONFIG as { SKIP_SETUP: boolean }).SKIP_SETUP = true;
+const urlMode = params.get('mode');
+if (urlMode === 'offensive' || urlMode === 'warfare') (CONFIG as { GAME_MODE: 'warfare' | 'offensive' }).GAME_MODE = urlMode;
 {
   const diff = params.get('ai') ?? CONFIG.AI_DIFFICULTY;
   const preset = CONFIG.AI_DIFFICULTY_PRESETS[diff] ?? CONFIG.AI_DIFFICULTY_PRESETS['normal']!;

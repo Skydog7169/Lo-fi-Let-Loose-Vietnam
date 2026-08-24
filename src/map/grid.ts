@@ -33,7 +33,7 @@ export function buildTerrainGrid(map: MapData): TerrainGrid {
       terrain[i] = t;
       const sp = CONFIG.TERRAIN_SPEED[t] ?? 1;
       infCost[i] = sp > 0 ? 1 / sp : Infinity;
-      const vsp = t === 'road' ? CONFIG.ROAD_VEHICLE_SPEED : t === 'marsh' ? 0 : sp;
+      const vsp = t === 'road' ? CONFIG.ROAD_VEHICLE_SPEED : t === 'trail' ? CONFIG.TRAIL_VEHICLE_SPEED : t === 'grass' ? CONFIG.GRASS_VEHICLE_SPEED : t === 'marsh' ? 0 : sp;
       vehCost[i] = vsp > 0 ? 1 / vsp : Infinity;
       cover[i] = CONFIG.TERRAIN_IS_COVER[t] ? 1 : 0;
       conceal[i] = CONFIG.TERRAIN_CONCEALS[t] ? 1 : 0;

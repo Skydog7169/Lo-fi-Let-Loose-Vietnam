@@ -167,7 +167,7 @@ export const SCENARIOS: Record<string, (s: GameState) => void> = {
     combatOnly(s);
     place(s, 'PAVN', 'infantry', 'A', v(300, 560), { kind: 'defend', pos: v(300, 560) });
     place(s, 'US', 'infantry', 'A', v(440, 520), { kind: 'attack', pos: v(330, 550) });
-    place(s, 'US', 'infantry', 'B', v(440, 720), { kind: 'attack', pos: v(260, 615) });
+    place(s, 'US', 'infantry', 'B', v(440, 720), { kind: 'attack', pos: v(295, 580) });
   },
   /** Same as flank but without the flanker — control: the frontal push alone should stall/lose. */
   frontal(s) {
@@ -210,6 +210,12 @@ export function autoPlaceUsGarrisons(s: GameState): void {
 
 export function createInitialState(seed: number, scenario: string = CONFIG.SCENARIO): GameState {
   const state = createEmptyState(seed, scenario);
+  if (scenario === 'match' || scenario === 'default') { // full matches start with the map's standing fortifications
+    const d = state.map.defenses;
+    for (const w of d.wires) state.wires.push({ side: 'US', a: v(w.a.x, w.a.y), b: v(w.b.x, w.b.y), hp: CONFIG.WIRE_HP });
+    for (const t of d.trenches) state.trenches.push({ side: t.side, a: v(t.a.x, t.a.y), b: v(t.b.x, t.b.y) });
+    for (const b of d.bunkers) state.bunkers.push({ side: b.side, pos: v(b.pos.x, b.pos.y), hp: CONFIG.BUNKER_HP });
+  }
   (SCENARIOS[scenario] ?? SCENARIOS['default']!)(state);
   return state;
 }

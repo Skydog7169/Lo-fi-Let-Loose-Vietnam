@@ -5,7 +5,7 @@ import { isVehicle, type GameState, type Side } from '../state';
 import { dist2 } from '../vec';
 
 export function updateCapture(state: GameState, dt: number): void {
-  if (state.active >= state.points.length) return;
+  if (state.active >= state.points.length || state.active < 0) return;
   const ps = state.points[state.active]!;
   const pm = state.map.points[state.active]!;
   const r2 = CONFIG.POINT_RADIUS ** 2;
@@ -18,16 +18,23 @@ export function updateCapture(state: GameState, dt: number): void {
   }
   // tanks count as one body; infantry dots each count as one — superiority is raw count
   const diff = Math.max(-CONFIG.CAPTURE_MAX_SUPERIORITY, Math.min(CONFIG.CAPTURE_MAX_SUPERIORITY, us - pavn));
-  const rate = (diff / CONFIG.CAPTURE_SECONDS_PER_DOT) * (diff < 0 ? CONFIG.CAPTURE_ROLLBACK_MULT : 1); // per second; rollback is slower
-  ps.progress = Math.max(0, Math.min(1, ps.progress + rate * dt));
-  if (ps.progress >= 1) {
-    ps.owner = 'US';
-    ps.progress = 1;
-    state.active++;
-    state.timer += CONFIG.CAPTURE_BONUS_SECONDS;
-    // squads re-evaluate defend spots (threat direction may change) — cheap: drop caches
-    for (const sq of state.squads) sq.defendCache = null;
-  }
+  // moving progress back toward 0 (undoing the enemy's work) is slower than pushing your own
+  const undoing = ps.progress !== 0 && Math.sign(diff) !== Math.sign(ps.progress);
+  const rate = (diff / CONFIG.CAPTURE_SECONDS_PER_DOT) * (undoing ? CONFIG.CAPTURE_ROLLBACK_MULT : 1);
+  const min = state.mode === 'warfare' ? -1 : 0; // offensive: PAVN only rolls back, never flips a point
+  ps.progress = Math.max(min, Math.min(1, ps.progress + rate * dt));
+  if (ps.progress >= 1) flipPoint(state, ps, 'US');
+  else if (ps.progress <= -1) flipPoint(state, ps, 'PAVN');
+}
+
+function flipPoint(state: GameState, ps: GameState['points'][number], to: 'US' | 'PAVN'): void {
+  ps.owner = to;
+  ps.progress = 0;
+  state.active += to === 'US' ? 1 : -1;
+  if (state.active >= 0 && state.active < state.points.length) state.points[state.active]!.progress = 0;
+  if (state.mode !== 'warfare') state.timer += CONFIG.CAPTURE_BONUS_SECONDS;
+  // squads re-evaluate defend spots (threat direction may change) — cheap: drop caches
+  for (const sq of state.squads) sq.defendCache = null;
 }
 
 export const isVehicleDot = (state: GameState, id: number): boolean => isVehicle(state.squads[state.dots[id]!.squadId]!.kind);

@@ -9,7 +9,7 @@ export const CONFIG = {
   MAX_FRAME_DT: 0.25, // seconds; clamp spiral-of-death
 
   // ---- Camera ----
-  CAM_MIN_ZOOM: 0.65, // fits the 1800x1200 map in the 1200x800 view
+  CAM_MIN_ZOOM: 0.5, // fits the 2400x1600 map in the 1200x800 view
   CAM_MAX_ZOOM: 4,
   CAM_WHEEL_ZOOM_STEP: 1.1, // multiplicative per wheel notch
 
@@ -32,6 +32,7 @@ export const CONFIG = {
     woods: 0.7,
     village: 0.85,
     grass: 0.9, // elephant grass: conceals, no cover
+    trail: 1.0, // narrow track: infantry normal, vehicles TRAIL_VEHICLE_SPEED
     marsh: 0.55, // flooded ground: slow, exposed, impassable to vehicles
     river: 0, // impassable
     road: 1.0, // infantry; vehicles use ROAD_VEHICLE_SPEED
@@ -39,12 +40,15 @@ export const CONFIG = {
     ford: 0.6,
     hq: 1.0,
   } as Record<string, number>,
-  ROAD_VEHICLE_SPEED: 1.2,
+  ROAD_VEHICLE_SPEED: 1.4, // vehicles fly on roads…
+  TRAIL_VEHICLE_SPEED: 1.2, // …make good time on trails…
+  GRASS_VEHICLE_SPEED: 0.75, // …and wallow in elephant grass
   TERRAIN_IS_COVER: {
     open: false,
     woods: true,
     village: true,
     grass: false, // grass hides you but does not stop bullets
+    trail: false,
     marsh: false,
     river: false,
     road: false,
@@ -57,6 +61,7 @@ export const CONFIG = {
     woods: true,
     village: true,
     grass: true, // the infiltration terrain: invisible until close, but no protection
+    trail: false,
     marsh: false,
     river: false,
     road: false,
@@ -160,6 +165,8 @@ export const CONFIG = {
   MAX_EFFECTS: 600,
 
   // ---- Match (bible §3) ----
+  GAME_MODE: 'warfare' as 'warfare' | 'offensive', // warfare: both sides fight for the middle; most points at time-out wins
+  WARFARE_TIMER_SECONDS: 1800, // 30:00 fixed — no capture time bonus in warfare
   MATCH_SECONDS: 15 * 60,
   CAPTURE_BONUS_SECONDS: 3 * 60,
   SETUP_SECONDS: 60,
@@ -321,6 +328,9 @@ export const CONFIG = {
     villageEdge: '#55554f',
     river: '#4c7eab',
     road: '#d8ccA0',
+    trail: '#cbbc90',
+    grass: '#9aa568',
+    marsh: '#7d9a86',
     bridge: '#8c6f4c',
     ford: '#7da3c4',
     hq: '#b9a97a',

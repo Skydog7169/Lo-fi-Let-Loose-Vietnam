@@ -1,7 +1,7 @@
 // HUD: top bar = timer, capture strip (lock chain), resource readouts with /min;
 // bottom strip = controls + debug squad states; overlays for setup and end.
 import { CONFIG } from '../config';
-import type { GameState, Side } from '../state';
+import { territoryEdgeX, type GameState, type Side } from '../state';
 import { incomePerMinute } from '../systems/economy';
 import { fmtTime } from '../systems/match';
 import { dotsOnActivePoint } from '../systems/capture';
@@ -25,7 +25,7 @@ function drawTopBar(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState
   // timer (centre)
   const timerCol = state.timer < 60 ? C.alarm : C.hudText;
   text(ctx, fmtTime(state.timer), W / 2, 14, timerCol, 'bold 18px monospace', 'center');
-  text(ctx, state.phase === 'setup' ? 'SETUP' : state.phase === 'ended' ? 'ENDED' : 'OFFENSIVE', W / 2, 31, C.hudDim, '9px monospace', 'center');
+  text(ctx, state.phase === 'setup' ? 'SETUP' : state.phase === 'ended' ? 'ENDED' : state.mode.toUpperCase(), W / 2, 31, C.hudDim, '9px monospace', 'center');
 
   // capture strip: 5 boxes left of centre
   const bw = 34, bh = 22, gap = 4;
@@ -47,7 +47,7 @@ function drawTopBar(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState
     // chain link
     if (i < state.points.length - 1) { ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.moveTo(x + bw, y + bh / 2); ctx.lineTo(x + bw + gap, y + bh / 2); ctx.stroke(); }
   }
-  if (state.active < state.points.length) {
+  if (state.active >= 0 && state.active < state.points.length) {
     const us = dotsOnActivePoint(state, 'US'), pv = dotsOnActivePoint(state, 'PAVN');
     text(ctx, `${state.map.points[state.active]!.name}  ${us}v${pv}`, x0, 36, C.hudDim, '9px monospace');
   }
@@ -72,11 +72,7 @@ function drawTopBar(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState
 }
 
 function sectorX(state: GameState): number {
-  const pts = state.map.points;
-  if (state.active >= pts.length) return state.map.width;
-  const cur = pts[state.active]!.pos.x;
-  const prev = state.active > 0 ? pts[state.active - 1]!.pos.x : 90;
-  return (prev + cur) / 2;
+  return territoryEdgeX(state, 'US');
 }
 
 function drawBottom(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState, fps: number): void {
@@ -113,7 +109,8 @@ function drawOverlay(ctx: CanvasRenderingContext2D, state: GameState, ui: UiStat
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = C.hudBg; ctx.fillRect(W / 2 - 240, H / 2 - 90, 480, 180);
     const w = state.result.winner;
-    text(ctx, `${w} ${w === ui.player ? 'VICTORY' : 'WINS'}`, W / 2, H / 2 - 60, sideColor(w), 'bold 26px monospace', 'center');
+    const headline = w === null ? 'DRAW' : `${w} ${w === ui.player ? 'VICTORY' : 'WINS'}`;
+    text(ctx, headline, W / 2, H / 2 - 60, w === null ? C.hudText : sideColor(w), 'bold 26px monospace', 'center');
     text(ctx, state.result.reason.toUpperCase(), W / 2, H / 2 - 32, C.hudText, '12px monospace', 'center');
     const sides: Side[] = ['US', 'PAVN'];
     let y = H / 2 - 4;

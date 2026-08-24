@@ -166,7 +166,7 @@ import { makeCommander } from './commander';
 import { makeCommanderAi } from './systems/commander_ai';
 
 export interface MatchResult {
-  seed: number; seconds: number; result: { winner: string; reason: string } | null; phase: string;
+  seed: number; seconds: number; result: { winner: string | null; reason: string } | null; phase: string;
   points: string; stats: GameState['stats']; garrisons: Record<string, number>; abilitiesBought: Record<string, number>;
   casualtyTimeline: number[][];
 }
@@ -199,7 +199,7 @@ export function runAiMatch(seed: number, maxSeconds = 20 * 60, opts: { passiveUs
   lastMatchState = st;
   return {
     seed, seconds: Math.round(st.time), result: st.result, phase: st.phase,
-    points: st.points.map((p) => p.owner[0]).join(''), stats: st.stats, garrisons: gar, abilitiesBought: bought, casualtyTimeline: tl,
+    points: st.points.map((p) => (p.owner ? p.owner[0] : 'n')).join(''), stats: st.stats, garrisons: gar, abilitiesBought: bought, casualtyTimeline: tl,
   };
 }
 

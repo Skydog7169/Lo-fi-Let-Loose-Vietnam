@@ -41,7 +41,7 @@ export function ownedGarrisons(state: GameState, side: Side): Garrison[] {
 
 /** Spawns this close to the contested point are locked (both sides): reinforcements must walk in. */
 export function spawnLocked(state: GameState, p: Vec, side?: Side): boolean {
-  if (state.active >= state.map.points.length) return false;
+  if (state.active >= state.map.points.length || state.active < 0) return false;
   if (dist2(p, state.map.points[state.active]!.pos) > CONFIG.ACTIVE_POINT_SPAWN_LOCK_R ** 2) return false;
   // a garrison on a point you hold (not the contested one) always spawns
   if (side && CONFIG.GARRISON_ON_OWNED_POINT) {

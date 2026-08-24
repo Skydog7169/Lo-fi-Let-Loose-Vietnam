@@ -1,8 +1,8 @@
 // Everything is canvas primitives: flat terrain colours, dots, lines, glyphs.
 // The static map layer is rendered once to an offscreen canvas at 2× and blitted.
 import { CONFIG } from '../config';
-import type { MapData, Shape } from '../map/an_cuong';
-import { inOwnTerritory, sectorLineX, type Dot, type GameState, type Garrison, type Side, type Squad } from '../state';
+import { pointInShape, type MapData, type Shape } from '../map/an_cuong';
+import { inOwnTerritory, territoryEdgeX, type Dot, type GameState, type Garrison, type Side, type Squad } from '../state';
 import { concealsAt } from '../map/grid';
 import { spawnLocked } from '../systems/spawning';
 import { garrisonPlacementError } from '../commander';
@@ -13,7 +13,17 @@ const C = CONFIG.COLORS;
 const STATIC_SCALE = 2;
 
 export const sideColor = (s: Side): string => (s === 'US' ? C.us : C.pavn);
-export const sideDim = (s: Side): string => (s === 'US' ? C.usDim : C.pavnDim);
+export const sideDim = (s: Side | null): string => (s === 'US' ? C.usDim : s === 'PAVN' ? C.pavnDim : 'rgba(150,145,130,0.45)');
+
+function shapeBounds(s2: Shape): { x0: number; y0: number; x1: number; y1: number } {
+  if (s2.kind === 'rect') return { x0: s2.x, y0: s2.y, x1: s2.x + s2.w, y1: s2.y + s2.h };
+  if (s2.kind === 'circle') return { x0: s2.c.x - s2.r, y0: s2.c.y - s2.r, x1: s2.c.x + s2.r, y1: s2.c.y + s2.r };
+  const pts = s2.pts;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+  const pad = s2.kind === 'stroke' ? s2.width / 2 : 0;
+  return { x0: x0 - pad, y0: y0 - pad, x1: x1 + pad, y1: y1 + pad };
+}
 
 function traceShape(ctx: CanvasRenderingContext2D, s: Shape): void {
   ctx.beginPath();
@@ -59,6 +69,20 @@ export function buildStaticLayer(map: MapData): HTMLCanvasElement {
       case 'road':
         if (s.kind === 'stroke') { ctx.strokeStyle = C.road; ctx.lineWidth = s.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); }
         break;
+      case 'trail':
+        if (s.kind === 'stroke') {
+          ctx.strokeStyle = C.trail; ctx.lineWidth = s.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          ctx.setLineDash([s.width * 2.2, s.width * 1.1]); ctx.stroke(); ctx.setLineDash([]);
+        }
+        break;
+      case 'grass': {
+        ctx.fillStyle = C.grass; ctx.fill();
+        break;
+      }
+      case 'marsh': {
+        ctx.fillStyle = C.marsh; ctx.fill();
+        break;
+      }
       case 'bridge':
         ctx.fillStyle = C.bridge; ctx.fill();
         ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1; ctx.stroke();
@@ -74,6 +98,24 @@ export function buildStaticLayer(map: MapData): HTMLCanvasElement {
       case 'hq':
       case 'open':
         break;
+    }
+  }
+  // grass texture: short vertical tufts; marsh: broken horizontal water dashes
+  for (const r of map.regions) {
+    if (r.terrain !== 'grass' && r.terrain !== 'marsh') continue;
+    const b = shapeBounds(r.shape);
+    if (r.terrain === 'grass') {
+      ctx.strokeStyle = 'rgba(60,70,30,0.35)'; ctx.lineWidth = 1;
+      for (let y = b.y0 + 4; y < b.y1; y += 9) for (let x = b.x0 + 4 + (((y / 9) | 0) % 2) * 4; x < b.x1; x += 9) {
+        if (!pointInShape({ x, y }, r.shape)) continue;
+        ctx.beginPath(); ctx.moveTo(x, y + 2); ctx.lineTo(x, y - 2); ctx.stroke();
+      }
+    } else {
+      ctx.strokeStyle = 'rgba(60,100,130,0.4)'; ctx.lineWidth = 1;
+      for (let y = b.y0 + 5; y < b.y1; y += 10) for (let x = b.x0 + 4; x < b.x1; x += 14) {
+        if (!pointInShape({ x, y }, r.shape)) continue;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 7, y); ctx.stroke();
+      }
     }
   }
   // woods texture: sparse darker stipple
@@ -330,12 +372,14 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(staticLayer, 0, 0, state.map.width, state.map.height);
 
-  // territory: tint the enemy side of the sector line, draw the line
-  const lx = sectorLineX(state);
+  // territory: tint everything beyond our edge; draw both edges in warfare (no-man's-land between them)
+  const lx = territoryEdgeX(state, me);
   ctx.fillStyle = C.fogEnemy;
   if (me === 'US') ctx.fillRect(lx, 0, state.map.width - lx, state.map.height); else ctx.fillRect(0, 0, lx, state.map.height);
+  const edges = state.mode === 'warfare' ? [territoryEdgeX(state, 'US'), territoryEdgeX(state, 'PAVN')] : [lx];
   ctx.strokeStyle = C.sectorLine; ctx.lineWidth = 1.5; ctx.setLineDash([8, 6]);
-  ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx, state.map.height); ctx.stroke(); ctx.setLineDash([]);
+  for (const ex of edges) { ctx.beginPath(); ctx.moveTo(ex, 0); ctx.lineTo(ex, state.map.height); ctx.stroke(); }
+  ctx.setLineDash([]);
 
   // capture points: owner tint, active progress ring with pulse
   for (let i = 0; i < state.points.length; i++) {
@@ -348,12 +392,13 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
       // spawn-lock ring: no garrison/OP spawns inside
       ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1; ctx.setLineDash([2, 6]);
       ctx.beginPath(); ctx.arc(pm.pos.x, pm.pos.y, CONFIG.ACTIVE_POINT_SPAWN_LOCK_R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-      if (ps.progress > 0) {
-        ctx.strokeStyle = C.us; ctx.lineWidth = 5; ctx.lineCap = 'butt';
-        ctx.beginPath(); ctx.arc(pm.pos.x, pm.pos.y, CONFIG.POINT_RADIUS + 4, -Math.PI / 2, -Math.PI / 2 + ps.progress * Math.PI * 2); ctx.stroke();
+      if (ps.progress !== 0) {
+        // signed progress: blue arc for a US capture in the making, red for PAVN
+        ctx.strokeStyle = ps.progress > 0 ? C.us : C.pavn; ctx.lineWidth = 5; ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.arc(pm.pos.x, pm.pos.y, CONFIG.POINT_RADIUS + 4, -Math.PI / 2, -Math.PI / 2 + Math.abs(ps.progress) * Math.PI * 2); ctx.stroke();
       }
-    } else if (i < state.active) {
-      // locked behind the front
+    } else {
+      // locked (behind either front)
       ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(pm.pos.x - 5, pm.pos.y + 24); ctx.lineTo(pm.pos.x + 5, pm.pos.y + 24); ctx.stroke();
     }

@@ -85,7 +85,7 @@ export interface Garrison {
 
 export interface Resources { wb: number; mun: number; man: number; fuel: number }
 
-export interface PointState { id: number; owner: Side; progress: number } // progress = attacker (US) capture 0..1
+export interface PointState { id: number; owner: Side | null; progress: number } // offensive: 0..1 US capture. warfare: signed, +1 flips to US, −1 to PAVN. null owner = neutral middle
 
 export type MatchPhase = 'draft' | 'setup' | 'play' | 'ended';
 export type AbilityKind = 'recon' | 'strafe' | 'barrage' | 'supply' | 'garrison' | 'redeploy' | 'wire' | 'trench' | 'bunker';
@@ -106,7 +106,7 @@ export interface VisibleState {
   /** Own assets and public match facts — everything a commander legitimately knows. */
   own: { squads: Squad[]; garrisons: Garrison[]; res: Resources; cooldowns: Record<AbilityKind, number>; supplies: Supply[] };
   defenses: { wires: Wire[]; trenches: Trench[]; bunkers: Bunker[] }; // both sides' — earthworks are visible to everyone
-  pub: { points: PointState[]; active: number; sectorX: number; timer: number; phase: MatchPhase };
+  pub: { points: PointState[]; active: number; sectorX: number; timer: number; phase: MatchPhase; mode: 'warfare' | 'offensive' };
   enemyDots: Dot[]; // visible enemy dots (live references; do not mutate)
   enemyGarrisons: Garrison[];
   enemyOps: { squadId: number; pos: Vec }[];
@@ -143,7 +143,8 @@ export interface GameState {
   setupTimer: number;
   setupDone: Record<Side, boolean>;
   timer: number; // seconds remaining
-  result: { winner: Side; reason: string } | null;
+  result: { winner: Side | null; reason: string } | null; // null winner = draw
+  mode: 'warfare' | 'offensive';
   points: PointState[];
   active: number; // index into points of the contested point (or points.length when all taken)
   garrisons: Garrison[];
@@ -235,7 +236,7 @@ export function formationOffset(slot: number, n: number, heading = 0): Vec {
   return v(f.x + l.x, f.y + l.y);
 }
 
-export function createEmptyState(seed: number, scenario: string): GameState {
+export function createEmptyState(seed: number, scenario: string, mode: 'warfare' | 'offensive' = scenario === 'match' || scenario === 'default' ? CONFIG.GAME_MODE : 'offensive'): GameState {
   nextSquadId = 0;
   nextDotId = 0;
   const map = AN_CUONG;
@@ -255,10 +256,17 @@ export function createEmptyState(seed: number, scenario: string): GameState {
     phase: 'draft',
     setupTimer: CONFIG.SETUP_SECONDS,
     setupDone: { US: false, PAVN: false },
-    timer: CONFIG.MATCH_SECONDS,
+    timer: mode === 'warfare' ? CONFIG.WARFARE_TIMER_SECONDS : CONFIG.MATCH_SECONDS,
     result: null,
-    points: map.points.map((p) => ({ id: p.id, owner: 'PAVN' as Side, progress: 0 })),
-    active: 0,
+    points: map.points.map((p, i) => {
+      if (mode === 'warfare') {
+        const mid = Math.floor(map.points.length / 2);
+        return { id: p.id, owner: (i < mid ? 'US' : i > mid ? 'PAVN' : null) as Side | null, progress: 0 };
+      }
+      return { id: p.id, owner: 'PAVN' as Side | null, progress: 0 };
+    }),
+    mode,
+    active: mode === 'warfare' ? Math.floor(map.points.length / 2) : 0,
     garrisons: [],
     res: {
       US: { wb: CONFIG.START_WB, mun: CONFIG.START_MUN, man: CONFIG.START_MAN, fuel: CONFIG.START_FUEL },
@@ -285,7 +293,7 @@ export function createEmptyState(seed: number, scenario: string): GameState {
 export const zeroCooldowns = (): Record<AbilityKind, number> => ({ recon: 0, strafe: 0, barrage: 0, supply: 0, garrison: 0, redeploy: 0, wire: 0, trench: 0, bunker: 0 });
 
 export function emptyVisible(side: Side): VisibleState {
-  return { side, own: { squads: [], garrisons: [], res: { wb: 0, mun: 0, man: 0, fuel: 0 }, cooldowns: zeroCooldowns(), supplies: [] }, defenses: { wires: [], trenches: [], bunkers: [] }, pub: { points: [], active: 0, sectorX: 0, timer: 0, phase: 'draft' }, enemyDots: [], enemyGarrisons: [], enemyOps: [], ghosts: [], dotVisible: new Uint8Array(0), garrisonVisible: new Uint8Array(0), opVisible: new Uint8Array(0) };
+  return { side, own: { squads: [], garrisons: [], res: { wb: 0, mun: 0, man: 0, fuel: 0 }, cooldowns: zeroCooldowns(), supplies: [] }, defenses: { wires: [], trenches: [], bunkers: [] }, pub: { points: [], active: 0, sectorX: 0, timer: 0, phase: 'draft', mode: 'offensive' }, enemyDots: [], enemyGarrisons: [], enemyOps: [], ghosts: [], dotVisible: new Uint8Array(0), garrisonVisible: new Uint8Array(0), opVisible: new Uint8Array(0) };
 }
 
 export function createGarrison(state: GameState, side: Side, pos: Vec): Garrison {
@@ -298,13 +306,30 @@ export function createGarrison(state: GameState, side: Side, pos: Vec): Garrison
 export function sectorLineX(state: GameState): number {
   const pts = state.map.points;
   if (state.active >= pts.length) return state.map.width; // everything is US
+  if (state.active < 0) return 0; // everything is PAVN (warfare: P1 fell)
   const cur = pts[state.active]!.pos.x;
   const prev = state.active > 0 ? pts[state.active - 1]!.pos.x : state.map.hqs.find((h) => h.side === 'US')!.rect.w;
   return (prev + cur) / 2;
 }
 
+/** Territory boundary for one side. In warfare there are two edges with no-man's-land between them
+ *  (around the contested point); in offensive both edges are the single sector line. */
+export function territoryEdgeX(state: GameState, side: Side): number {
+  if (state.mode !== 'warfare') return sectorLineX(state);
+  const pts = state.map.points;
+  if (state.active >= pts.length) return side === 'US' ? state.map.width : state.map.width;
+  if (state.active < 0) return 0;
+  const cur = pts[state.active]!.pos.x;
+  if (side === 'US') {
+    const prev = state.active > 0 ? pts[state.active - 1]!.pos.x : state.map.hqs.find((h) => h.side === 'US')!.rect.w;
+    return (prev + cur) / 2;
+  }
+  const next = state.active < pts.length - 1 ? pts[state.active + 1]!.pos.x : state.map.width - state.map.hqs.find((h) => h.side === 'PAVN')!.rect.w;
+  return (next + cur) / 2;
+}
+
 export function inOwnTerritory(state: GameState, side: Side, p: Vec): boolean {
-  const x = sectorLineX(state);
+  const x = territoryEdgeX(state, side);
   return side === 'US' ? p.x < x : p.x >= x;
 }
 

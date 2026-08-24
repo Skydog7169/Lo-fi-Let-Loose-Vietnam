@@ -15,6 +15,12 @@ export interface Region { terrain: TerrainKey; shape: Shape }
 export interface CapturePoint { id: number; name: string; pos: Vec }
 export interface HqZone { side: 'US' | 'PAVN'; rect: { x: number; y: number; w: number; h: number } }
 
+export interface MapDefenses {
+  wires: { a: Vec; b: Vec }[];
+  trenches: { a: Vec; b: Vec; side: 'US' | 'PAVN' }[];
+  bunkers: { pos: Vec; side: 'US' | 'PAVN' }[];
+}
+
 export interface MapData {
   name: string;
   width: number;
@@ -22,11 +28,12 @@ export interface MapData {
   regions: Region[];
   points: CapturePoint[];
   hqs: HqZone[];
+  defenses: MapDefenses;
   /** x-coordinate midpoints between consecutive points; used for sector lines (Phase 3). */
 }
 
 /** The map is authored at 1200×800 and scaled up: bigger world, same relative layout. */
-export const MAP_SCALE = 1.5;
+export const MAP_SCALE = 2.0;
 const K = MAP_SCALE;
 const P = (x: number, y: number): Vec => ({ x: x * K, y: y * K });
 const R = (x: number, y: number, w: number, h: number) => ({ x: x * K, y: y * K, w: w * K, h: h * K });
@@ -52,6 +59,15 @@ const ROAD_MAIN: Vec[] = [
 ];
 const ROAD_SOUTH: Vec[] = [P(230, 420), P(380, 520), P(530, 521), P(620, 521), P(650, 450)];
 const ROAD_NORTH_SPUR: Vec[] = [P(840, 340), P(880, 220), P(900, 90)];
+// southern main supply route + a farm road on the west bank
+const ROAD_SOUTH_MAIN: Vec[] = [P(0, 600), P(130, 615), P(260, 640), P(380, 640), P(530, 620), P(620, 560), P(650, 450)];
+const ROAD_WEST_FARM: Vec[] = [P(230, 420), P(210, 300), P(240, 200), P(330, 140)];
+// trails: narrow tracks — vehicles make decent time, infantry unaffected
+const TRAIL_VILLAGE_BRIDGE: Vec[] = [P(440, 330), P(500, 430), P(546, 521)];
+const TRAIL_FORD: Vec[] = [P(330, 140), P(460, 110), P(520, 97), P(584, 97), P(680, 130), P(760, 180), P(840, 260), P(840, 340)];
+const TRAIL_EAST_SOUTH: Vec[] = [P(1030, 430), P(1000, 560), P(940, 640), P(800, 700)];
+const TRAIL_MIDDLE_SOUTH: Vec[] = [P(650, 450), P(680, 560), P(700, 650), P(700, 760)];
+const TRAIL_EAST_NORTH: Vec[] = [P(840, 340), P(950, 300), P(1060, 280), P(1150, 300), P(1200, 340)];
 
 export const AN_CUONG: MapData = {
   name: 'An Cuong',
@@ -97,6 +113,13 @@ export const AN_CUONG: MapData = {
     { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_MAIN, width: 8 * K } },
     { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_SOUTH, width: 8 * K } },
     { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_NORTH_SPUR, width: 6 * K } },
+    { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_SOUTH_MAIN, width: 8 * K } },
+    { terrain: 'road', shape: { kind: 'stroke', pts: ROAD_WEST_FARM, width: 6 * K } },
+    { terrain: 'trail', shape: { kind: 'stroke', pts: TRAIL_VILLAGE_BRIDGE, width: 4 * K } },
+    { terrain: 'trail', shape: { kind: 'stroke', pts: TRAIL_FORD, width: 4 * K } },
+    { terrain: 'trail', shape: { kind: 'stroke', pts: TRAIL_EAST_SOUTH, width: 4 * K } },
+    { terrain: 'trail', shape: { kind: 'stroke', pts: TRAIL_MIDDLE_SOUTH, width: 4 * K } },
+    { terrain: 'trail', shape: { kind: 'stroke', pts: TRAIL_EAST_NORTH, width: 4 * K } },
 
     // --- Crossings: 2 bridges on the roads + 1 ford hidden in the north woods ---
     { terrain: 'bridge', shape: { kind: 'rect', ...R(536, 289, 58, 22) } },
@@ -133,6 +156,23 @@ export const AN_CUONG: MapData = {
     { side: 'US', rect: R(0, 320, 90, 160) },
     { side: 'PAVN', rect: R(1110, 340, 90, 160) },
   ],
+  // Standing fortifications: each side's second point is dug in; wire pinches the middle corridors.
+  defenses: {
+    wires: [
+      { a: P(600, 205), b: P(660, 235) }, // north gap
+      { a: P(598, 565), b: P(655, 598) }, // south of the lower bridge
+    ],
+    trenches: [
+      { a: P(408, 296), b: P(408, 392), side: 'US' }, // An Cuong east face
+      { a: P(872, 300), b: P(872, 395), side: 'PAVN' }, // Hill Hamlet west face
+      { a: P(610, 415), b: P(608, 470), side: 'US' }, // middle approaches
+      { a: P(695, 420), b: P(697, 475), side: 'PAVN' },
+    ],
+    bunkers: [
+      { pos: P(415, 345), side: 'US' },
+      { pos: P(865, 348), side: 'PAVN' },
+    ],
+  },
 };
 
 // ---- geometry helpers for rasterising regions (used by map/grid.ts and draw) ----

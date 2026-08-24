@@ -16,8 +16,17 @@ export function updateMatch(state: GameState, dt: number): void {
   }
   if (state.phase !== 'play') return;
   state.timer -= dt;
-  if (state.active >= state.points.length) { end(state, 'US', 'captured point 5'); return; }
-  if (state.timer <= 0) { state.timer = 0; end(state, 'PAVN', 'held at time-out'); return; }
+  if (state.active >= state.points.length) { end(state, 'US', `captured point ${state.points.length}`); return; }
+  if (state.active < 0) { end(state, 'PAVN', 'captured point 1'); return; }
+  if (state.timer <= 0) {
+    state.timer = 0;
+    if (state.mode === 'warfare') {
+      const us = state.points.filter((p) => p.owner === 'US').length;
+      const pavn = state.points.filter((p) => p.owner === 'PAVN').length;
+      end(state, us > pavn ? 'US' : pavn > us ? 'PAVN' : null, us === pavn ? 'stalemate at time-out' : `held ${Math.max(us, pavn)} points at time-out`);
+    } else end(state, 'PAVN', 'held at time-out');
+    return;
+  }
   for (const side of ['US', 'PAVN'] as Side[]) {
     if (ownedGarrisons(state, side).length === 0 && !state.squads.some((s) => s.side === side && squadIsLiving(state, s))) {
       end(state, side === 'US' ? 'PAVN' : 'US', `${side} annihilated`);
@@ -26,7 +35,7 @@ export function updateMatch(state: GameState, dt: number): void {
   }
 }
 
-function end(state: GameState, winner: Side, reason: string): void {
+function end(state: GameState, winner: Side | null, reason: string): void {
   state.phase = 'ended';
   state.result = { winner, reason };
 }

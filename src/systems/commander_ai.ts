@@ -138,6 +138,12 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
       const cand = recon ?? (onField.length > CONFIG.AI_POINT_SQUADS ? onField[onField.length - 1]! : undefined);
       if (cand) { infiltratorId = cand.id; plans.set(cand.id, { waypoints: corridorPlan(vs), idx: 0 }); }
     }
+    // role: in warfare you attack whenever the contested point is not yours; in offensive US attacks, PAVN defends
+    const activePt = vs.pub.points[vs.pub.active];
+    const attacking = vs.pub.mode === 'warfare'
+      ? activePt === undefined || activePt.owner !== side
+      : side === 'US';
+    const towardEnemy = side === 'US' ? 1 : -1;
     // ---- (1) keep N squads on the active point ----
     const pointSquads = onField
       .filter((s) => s.id !== infiltratorId)
@@ -145,15 +151,14 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
       .sort((a, b) => a.d - b.d)
       // defender keeps AI_POINT_SQUADS on the point and screens with the rest; attacker masses everything
       // (numbers win firefights — see SUPERIORITY_RATIO), spreading squads around the point rather than stacking
-      .slice(0, side === 'US' ? 99 : CONFIG.AI_POINT_SQUADS)
+      .slice(0, attacking ? 99 : CONFIG.AI_POINT_SQUADS)
       .map((x) => x.s);
     const pointIds = new Set(pointSquads.map((s) => s.id));
     // counter-attack: if the enemy is winning the circle, defenders assault the point instead of sitting on markers
-    const activePt = vs.pub.points[vs.pub.active];
-    const losingPoint = side === 'PAVN' && activePt !== undefined && activePt.progress > 0.2;
+    const losingPoint = !attacking && activePt !== undefined && activePt.progress * towardEnemy < -0.2;
     pointSquads.forEach((s, i) => {
       const off = v(-dirToEnemy * 30 + (i ? 0 : 10), ((i % 2 ? 1 : -1) * (35 + Math.floor(i / 2) * 30)));
-      const want = side === 'US'
+      const want = attacking
         ? { kind: 'attack' as const, pos: v(activePos.x + off.x * 0.5, activePos.y + off.y * 0.5) }
         : losingPoint
           ? { kind: 'attack' as const, pos: v(activePos.x + off.x * 0.3, activePos.y + off.y * 0.3) } // assault flag on the point → push into the circle
@@ -164,7 +169,7 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
     for (const s of onField) {
       if (pointIds.has(s.id) || s.id === infiltratorId) continue;
       const flankY = activePos.y + (s.id % 2 ? 110 : -110);
-      const want = side === 'US'
+      const want = attacking
         ? { kind: 'attack' as const, pos: v(activePos.x + 20, Math.max(30, Math.min(map.height - 30, flankY))) }
         : { kind: 'defend' as const, pos: v(activePos.x - dirToEnemy * -70, Math.max(30, Math.min(map.height - 30, flankY))) };
       if (!s.marker || s.marker.kind !== want.kind || dist(s.marker.pos, want.pos) > 12) cmd.issueMarker(s.id, want.kind, want.pos);
@@ -172,11 +177,11 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
     // tanks: attacker pushes the point along the road, defender holds behind it
     for (const s of squads) {
       if (s.kind !== 'tank') continue;
-      const want = side === 'US' ? { kind: 'attack' as const, pos: v(activePos.x - 20, activePos.y) } : { kind: 'defend' as const, pos: v(activePos.x + 90, activePos.y + 20) };
+      const want = attacking ? { kind: 'attack' as const, pos: v(activePos.x - towardEnemy * 20, activePos.y) } : { kind: 'defend' as const, pos: v(activePos.x + dirToEnemy * -90, activePos.y + 20) };
       if (!s.marker || s.marker.kind !== want.kind || dist(s.marker.pos, want.pos) > 12) cmd.issueMarker(s.id, want.kind, want.pos);
     }
     // fortify (defender): a bunker behind the point, wire across the enemy approach — WB permitting, garrison first
-    if (side === 'PAVN' && vs.pub.phase === 'play') {
+    if (!attacking && vs.pub.phase === 'play') {
       const wb = vs.own.res.wb;
       const cds = vs.own.cooldowns;
       const bunkerNear = vs.defenses.bunkers.some((b) => b.side === side && dist(b.pos, activePos) < 150);

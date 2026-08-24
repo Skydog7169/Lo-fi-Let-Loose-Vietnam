@@ -5,7 +5,7 @@
 // reads visibility only from here.
 import { CONFIG } from '../config';
 import { concealsAt } from '../map/grid';
-import { inOwnTerritory, isVehicle, sectorLineX, type Dot, type GameState, type Side } from '../state';
+import { inOwnTerritory, isVehicle, territoryEdgeX, type Dot, type GameState, type Side } from '../state';
 import { dist2, v, type Vec } from '../vec';
 
 function visionRadius(state: GameState, d: Dot): number {
@@ -93,7 +93,7 @@ export function updateVision(state: GameState, dt: number): void {
       supplies: state.supplies.filter((s) => s.side === side),
     };
     vs.defenses = { wires: state.wires, trenches: state.trenches, bunkers: state.bunkers };
-    vs.pub = { points: state.points, active: state.active, sectorX: sectorLineX(state), timer: state.timer, phase: state.phase };
+    vs.pub = { points: state.points, active: state.active, sectorX: territoryEdgeX(state, side), timer: state.timer, phase: state.phase, mode: state.mode };
   }
 }
 

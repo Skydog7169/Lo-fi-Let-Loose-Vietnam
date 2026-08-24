@@ -47,7 +47,7 @@ export function garrisonPlacementError(state: GameState, side: Side, pos: Vec, o
     if (ownedBehind) continue; // you may build right on a point you hold
     if (dist(p.pos, pos) < CONFIG.GARRISON_MIN_POINT_DIST) return 'point';
   }
-  if (state.active < state.map.points.length && dist(state.map.points[state.active]!.pos, pos) <= CONFIG.ACTIVE_POINT_SPAWN_LOCK_R) return 'locked';
+  if (state.active >= 0 && state.active < state.map.points.length && dist(state.map.points[state.active]!.pos, pos) <= CONFIG.ACTIVE_POINT_SPAWN_LOCK_R) return 'locked';
   if (opts.forRedeploy) return null;
   const owned = state.garrisons.filter((g) => g.side === side && g.state !== 'destroyed').length;
   if (state.phase === 'setup') {

@@ -244,7 +244,7 @@ function defendSpot(state: GameState, squad: Squad, marker: Vec): Vec {
 
 /** Is this squad's attack flag on (or next to) the contested point? */
 export function isAssaultingPoint(state: GameState, squad: Squad): boolean {
-  if (!squad.marker || squad.marker.kind !== 'attack' || state.active >= state.map.points.length) return false;
+  if (!squad.marker || squad.marker.kind !== 'attack' || state.active >= state.map.points.length || state.active < 0) return false;
   const p = state.map.points[state.active]!.pos;
   return dist(squad.marker.pos, p) <= CONFIG.POINT_RADIUS + CONFIG.ASSAULT_R;
 }
