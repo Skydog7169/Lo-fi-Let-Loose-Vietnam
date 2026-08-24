@@ -19,17 +19,26 @@ export const ABILITY_INFO: Record<AbilityKind, { name: string; hint: string; mod
   wire: { name: 'BARBED WIRE', hint: 'line · slows inf', mode: 'line' },
   trench: { name: 'TRENCH', hint: 'line · cover in it', mode: 'line' },
   bunker: { name: 'BUNKER', hint: 'strong cover · 400hp', mode: 'point' },
+  napalm: { name: 'NAPALM', hint: 'line · burns thru cover', mode: 'line' },
+  traps: { name: 'BOOBY TRAPS', hint: 'hidden field vs inf', mode: 'circle' },
+  mines: { name: 'AT MINES', hint: 'hidden field vs armour', mode: 'circle' },
 };
+
+/** The cards this side actually gets (faction abilities filter here). */
+export function sideAbilities(side: 'US' | 'PAVN'): AbilityKind[] {
+  return ABILITIES.filter((k) => { const sd = CONFIG.ABILITY[k]?.side; return !sd || sd === side; });
+}
 
 export function cardRect(i: number): { x: number; y: number; w: number; h: number } {
   return { x: PANEL_X + (PANEL_W - CARD_W) / 2, y: PANEL_Y + i * (CARD_H + CARD_GAP), w: CARD_W, h: CARD_H };
 }
 
 /** Which card (if any) is under a logical-space point. */
-export function orderCardAt(p: Vec): AbilityKind | null {
-  for (let i = 0; i < ABILITIES.length; i++) {
+export function orderCardAt(p: Vec, side: 'US' | 'PAVN' = 'US'): AbilityKind | null {
+  const list = sideAbilities(side);
+  for (let i = 0; i < list.length; i++) {
     const r = cardRect(i);
-    if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return ABILITIES[i]!;
+    if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return list[i]!;
   }
   return null;
 }
@@ -46,12 +55,13 @@ function fmtCd(s: number): string { return s >= 60 ? `${Math.floor(s / 60)}:${St
 export function drawOrders(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState): void {
   if (state.phase === 'draft') return;
   ctx.save();
-  ctx.fillStyle = C.hudBg; ctx.fillRect(PANEL_X, PANEL_Y - 14, PANEL_W, ABILITIES.length * (CARD_H + CARD_GAP) + 18);
+  const me = ui.player;
+  const list = sideAbilities(me);
+  ctx.fillStyle = C.hudBg; ctx.fillRect(PANEL_X, PANEL_Y - 14, PANEL_W, list.length * (CARD_H + CARD_GAP) + 18);
   ctx.fillStyle = C.hudDim; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('ORDERS', PANEL_X + 8, PANEL_Y - 6);
-  const me = ui.player;
-  for (let i = 0; i < ABILITIES.length; i++) {
-    const ab = ABILITIES[i]!;
+  for (let i = 0; i < list.length; i++) {
+    const ab = list[i]!;
     const def = CONFIG.ABILITY[ab]!;
     const info = ABILITY_INFO[ab];
     const r = cardRect(i);

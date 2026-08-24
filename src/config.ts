@@ -113,6 +113,7 @@ export const CONFIG = {
   TANK_HE_SUPPRESS: 0.6,
   TANK_HE_FLIGHT: 0.35,
   TANK_STANDOFF_FRACTION: 0.9, // tanks hold at this × range and never close further
+  TANK_AMMO_SWAP_S: 4, // loading the other shell type takes this long (AT vs armour, HE vs infantry)
   TANK_GUN_FIRE_INTERVAL: 3.0,
   TANK_GUN_HIT_CHANCE: 0.6,
   TANK_GUN_DAMAGE: 150,
@@ -212,7 +213,7 @@ export const CONFIG = {
   WB_BASE: 40, WB_PER_POINT: 25,
   START_WB_BONUS: 150, // flat WB granted to both sides at match start, on top of draft leftover
   MUN_BASE: 70, MUN_PER_POINT: 15,
-  MAN_BASE: 80, MAN_PER_POINT: 15,
+  MAN_BASE: 100, MAN_PER_POINT: 20,
   FUEL_BASE: 70, FUEL_PER_POINT: 15,
   START_WB: 200, // Phase 4 replaces with unspent draft budget
   START_MUN: 300,
@@ -238,10 +239,33 @@ export const CONFIG = {
     supply: { cost: 100, pool: 'fuel', cooldown: 60 },
     garrison: { cost: 200, pool: 'wb', cooldown: 120 },
     redeploy: { cost: 75, pool: 'wb', cooldown: 60 },
-    wire: { cost: 50, pool: 'wb', cooldown: 30 },
+    wire: { cost: 50, pool: 'wb', cooldown: 30 }, // dormant: deployable defenses are off the panel (map ones remain)
     trench: { cost: 75, pool: 'wb', cooldown: 45 },
     bunker: { cost: 150, pool: 'wb', cooldown: 90 },
-  } as Record<string, { cost: number; pool: 'wb' | 'mun' | 'man' | 'fuel'; cooldown: number }>,
+    napalm: { cost: 300, pool: 'wb', cooldown: 240, side: 'US' },
+    traps: { cost: 150, pool: 'wb', cooldown: 120, side: 'PAVN' },
+    mines: { cost: 100, pool: 'wb', cooldown: 90, side: 'PAVN' },
+  } as Record<string, { cost: number; pool: 'wb' | 'mun' | 'man' | 'fuel'; cooldown: number; side?: 'US' | 'PAVN' }>,
+  // ---- Napalm (US): a burning strip — fire ignores cover and keeps burning ----
+  NAPALM_MAX_LENGTH: 260,
+  NAPALM_HALF_W: 18,
+  NAPALM_DELAY: 1.5,
+  NAPALM_HIT_DAMAGE: 55, // on ignition, everyone in the strip, cover ignored (fire pours in)
+  NAPALM_BURN_S: 12, // the strip keeps burning
+  NAPALM_BURN_DPS: 16, // per second to anyone standing in it (both sides)
+  NAPALM_TANK_MULT: 0.4, // buttoned-up armour takes reduced burn
+  // ---- VC booby traps & AT mines (PAVN): hidden fields in own territory ----
+  TRAP_RADIUS: 60,
+  TRAP_CHARGES: 5,
+  TRAP_TRIGGER_CHANCE: 0.25, // per second, per enemy infantry dot moving inside the field
+  TRAP_DAMAGE: 35,
+  TRAP_SPLASH_R: 12,
+  TRAP_SPLASH_DAMAGE: 18,
+  TRAP_SUPPRESS: 0.8,
+  MINE_RADIUS: 45,
+  MINE_CHARGES: 3,
+  MINE_DAMAGE: 260, // per mine, to a vehicle that rolls in
+  MINE_TRIGGER_CHANCE: 0.5, // per second while a vehicle is moving in the field
   // ---- Deployable defenses (playtest addition) ----
   WIRE_MAX_LENGTH: 120,
   WIRE_SLOW_MULT: 0.12, // infantry all but stop in the wire (vehicles crush it at 0.8)

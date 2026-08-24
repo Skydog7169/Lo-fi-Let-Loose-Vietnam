@@ -5,9 +5,9 @@ import { CONFIG } from '../config';
 import { isCoverAt, isWalkable } from '../map/grid';
 import { rand } from '../rng';
 import { createGarrison, inOwnTerritory, isVehicle, pushEffect, type AbilityKind, type GameState, type Side } from '../state';
-import { dist, v, type Vec } from '../vec';
+import { dist, dist2, distToSegment2, v, type Vec } from '../vec';
 import { garrisonPlacementError } from '../commander';
-import { shellImpact } from './combat';
+import { killDot, shellImpact } from './combat';
 
 export type AbilityError = 'phase' | 'cooldown' | 'cost' | 'target' | 'territory' | 'supply' | 'point' | 'terrain';
 
@@ -46,6 +46,16 @@ export function abilityError(state: GameState, side: Side, ability: AbilityKind,
       if (!isWalkable(state.grid, pos) || !isWalkable(state.grid, pos2)) return 'terrain';
       return null;
     case 'bunker':
+      if (!inOwnTerritory(state, side, pos)) return 'territory';
+      if (!isWalkable(state.grid, pos)) return 'terrain';
+      return null;
+    case 'napalm':
+      if (CONFIG.ABILITY.napalm!.side && side !== CONFIG.ABILITY.napalm!.side) return 'target';
+      if (!pos2) return 'target';
+      return null;
+    case 'traps':
+    case 'mines':
+      if (CONFIG.ABILITY[ability]!.side && side !== CONFIG.ABILITY[ability]!.side) return 'target';
       if (!inOwnTerritory(state, side, pos)) return 'territory';
       if (!isWalkable(state.grid, pos)) return 'terrain';
       return null;
@@ -98,6 +108,15 @@ export function buyAbility(state: GameState, side: Side, ability: AbilityKind, p
     case 'bunker':
       state.bunkers.push({ side, pos: v(pos.x, pos.y), hp: CONFIG.BUNKER_HP });
       break;
+    case 'napalm':
+      state.fires.push({ side, a: v(pos.x, pos.y), b: clampLine(pos, pos2!, CONFIG.NAPALM_MAX_LENGTH), delay: CONFIG.NAPALM_DELAY, t: CONFIG.NAPALM_BURN_S });
+      break;
+    case 'traps':
+      state.minefields.push({ side, pos: v(pos.x, pos.y), r: CONFIG.TRAP_RADIUS, charges: CONFIG.TRAP_CHARGES, kind: 'ap' });
+      break;
+    case 'mines':
+      state.minefields.push({ side, pos: v(pos.x, pos.y), r: CONFIG.MINE_RADIUS, charges: CONFIG.MINE_CHARGES, kind: 'at' });
+      break;
     case 'redeploy': {
       const g = state.garrisons[garrisonId!]!;
       g.state = 'packing';
@@ -126,7 +145,7 @@ function strafeHit(state: GameState, s: { side: Side; a: Vec; b: Vec }, from: nu
     if (!vehicle && isCoverAt(state.grid, d.pos)) dmg *= 0.5;
     d.hp -= dmg;
     if (!vehicle) d.suppression = Math.min(1, d.suppression + CONFIG.STRAFE_SUPPRESS);
-    if (d.hp <= 0) { d.alive = false; d.hp = 0; d.targetId = -1; d.coverSeek = null; state.stats[d.side].casualties++; pushEffect(state, { kind: 'death', pos: v(d.pos.x, d.pos.y), side: d.side, ttl: CONFIG.DEATH_TTL, max: CONFIG.DEATH_TTL }); }
+    if (d.hp <= 0) killDot(state, d, 'strafe');
   }
   // impacts along the swept segment
   const n = Math.max(1, Math.round(Math.sqrt(l2) / 12));
@@ -144,6 +163,8 @@ export function updateAbilities(state: GameState, dt: number): void {
   }
   for (let i = state.recons.length - 1; i >= 0; i--) { const r = state.recons[i]!; r.t -= dt; if (r.t <= 0) state.recons.splice(i, 1); }
   for (let i = state.supplies.length - 1; i >= 0; i--) { const s = state.supplies[i]!; s.t -= dt; if (s.t <= 0) state.supplies.splice(i, 1); }
+  updateFires(state, dt);
+  updateMinefields(state, dt);
   for (let i = state.strafes.length - 1; i >= 0; i--) {
     const s = state.strafes[i]!;
     if (s.delay > 0) { s.delay -= dt; continue; }
@@ -172,6 +193,82 @@ export function updateAbilities(state: GameState, dt: number): void {
 }
 
 export { shellImpact };
+
+/** Napalm strips: ignition hit (cover ignored — fire pours into holes), then a lingering burn. */
+function updateFires(state: GameState, dt: number): void {
+  for (let i = state.fires.length - 1; i >= 0; i--) {
+    const f = state.fires[i]!;
+    if (f.delay > 0) {
+      f.delay -= dt;
+      if (f.delay <= 0) {
+        // ignition: everyone in the strip takes the hit, cover or not
+        for (const d of state.dots) {
+          if (!d.alive || distToSegment2(d.pos, f.a, f.b) > CONFIG.NAPALM_HALF_W ** 2) continue;
+          const veh = isVehicle(state.squads[d.squadId]!.kind);
+          d.hp -= CONFIG.NAPALM_HIT_DAMAGE * (veh ? CONFIG.NAPALM_TANK_MULT : 1);
+          if (!veh) d.suppression = 1;
+          if (d.hp <= 0) killDot(state, d, 'napalm');
+        }
+        const L = dist(f.a, f.b);
+        for (let k = 0; k <= L; k += 24) {
+          const q = v(f.a.x + ((f.b.x - f.a.x) * k) / Math.max(1, L), f.a.y + ((f.b.y - f.a.y) * k) / Math.max(1, L));
+          pushEffect(state, { kind: 'impact', pos: q, r: CONFIG.NAPALM_HALF_W, ttl: CONFIG.IMPACT_TTL, max: CONFIG.IMPACT_TTL });
+        }
+        // burn away wire and hurt structures caught in the strip
+        for (let w = state.wires.length - 1; w >= 0; w--) {
+          const wire = state.wires[w]!;
+          if (distToSegment2(wire.a, f.a, f.b) <= (CONFIG.NAPALM_HALF_W * 2) ** 2 || distToSegment2(wire.b, f.a, f.b) <= (CONFIG.NAPALM_HALF_W * 2) ** 2) state.wires.splice(w, 1);
+        }
+      }
+      continue;
+    }
+    f.t -= dt;
+    // the burn: standing in fire is not a plan (both sides)
+    for (const d of state.dots) {
+      if (!d.alive || distToSegment2(d.pos, f.a, f.b) > CONFIG.NAPALM_HALF_W ** 2) continue;
+      const veh = isVehicle(state.squads[d.squadId]!.kind);
+      d.hp -= CONFIG.NAPALM_BURN_DPS * (veh ? CONFIG.NAPALM_TANK_MULT : 1) * dt;
+      if (!veh) d.suppression = Math.min(1, d.suppression + dt * 0.8);
+      if (d.hp <= 0) killDot(state, d, 'napalm');
+    }
+    if (f.t <= 0) state.fires.splice(i, 1);
+  }
+}
+
+/** Hidden VC fields: booby traps shred infantry, AT mines break tanks. Triggered by movement inside. */
+function updateMinefields(state: GameState, dt: number): void {
+  for (let i = state.minefields.length - 1; i >= 0; i--) {
+    const m = state.minefields[i]!;
+    const r2 = m.r * m.r;
+    for (const d of state.dots) {
+      if (m.charges <= 0) break;
+      if (!d.alive || d.side === m.side || !d.moving) continue;
+      const veh = isVehicle(state.squads[d.squadId]!.kind);
+      if (m.kind === 'at' ? !veh : veh) continue;
+      if (dist2(d.pos, m.pos) > r2) continue;
+      if (rand(state.rng) > (m.kind === 'at' ? CONFIG.MINE_TRIGGER_CHANCE : CONFIG.TRAP_TRIGGER_CHANCE) * dt) continue;
+      m.charges--;
+      pushEffect(state, { kind: 'impact', pos: v(d.pos.x, d.pos.y), r: m.kind === 'at' ? 14 : 9, ttl: CONFIG.IMPACT_TTL, max: CONFIG.IMPACT_TTL });
+      if (m.kind === 'at') {
+        d.hp -= CONFIG.MINE_DAMAGE;
+        if (d.hp <= 0) killDot(state, d, 'mine');
+      } else {
+        d.hp -= CONFIG.TRAP_DAMAGE;
+        d.suppression = Math.min(1, d.suppression + CONFIG.TRAP_SUPPRESS);
+        if (d.hp <= 0) killDot(state, d, 'trap');
+        for (const o of state.dots) {
+          if (!o.alive || o.id === d.id || o.side === m.side) continue;
+          if (dist2(o.pos, d.pos) <= CONFIG.TRAP_SPLASH_R ** 2) {
+            o.hp -= CONFIG.TRAP_SPLASH_DAMAGE;
+            o.suppression = Math.min(1, o.suppression + CONFIG.TRAP_SUPPRESS * 0.6);
+            if (o.hp <= 0) killDot(state, o, 'trap');
+          }
+        }
+      }
+    }
+    if (m.charges <= 0) state.minefields.splice(i, 1);
+  }
+}
 
 /** Is there a friendly supply drop within SUPPLY_RADIUS of p? */
 export function supplied(state: GameState, side: Side, p: Vec): boolean {

@@ -339,6 +339,53 @@ function drawEffects(ctx: CanvasRenderingContext2D, state: GameState, ui: UiStat
         ctx.strokeStyle = e.flank ? C.tracerFlank : e.side === 'US' ? C.tracerUs : C.tracerPavn; ctx.lineWidth = e.flank ? 1.6 : 1;
         ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
         break;
+      case 'rocket': {
+        // smoke trail with a bright head that travels a→b
+        const prog = 1 - e.ttl / e.max;
+        const hx = e.a.x + (e.b.x - e.a.x) * Math.min(1, prog * 2.2);
+        const hy = e.a.y + (e.b.y - e.a.y) * Math.min(1, prog * 2.2);
+        ctx.globalAlpha = a * 0.55;
+        ctx.strokeStyle = '#b8b4a8'; ctx.lineWidth = 2; ctx.setLineDash([3, 4]);
+        ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(hx, hy); ctx.stroke(); ctx.setLineDash([]);
+        const L2 = Math.hypot(hx - e.a.x, hy - e.a.y);
+        for (let k = 8; k < L2; k += 12) {
+          const t01 = k / Math.max(1, L2);
+          ctx.fillStyle = 'rgba(190,186,175,0.35)';
+          ctx.beginPath(); ctx.arc(e.a.x + (hx - e.a.x) * t01, e.a.y + (hy - e.a.y) * t01 - (1 - t01) * 2, 1.6 + t01 * 1.6, 0, Math.PI * 2); ctx.fill();
+        }
+        if (prog < 0.5) { ctx.globalAlpha = a; ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.arc(hx, hy, 2, 0, Math.PI * 2); ctx.fill(); }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'explosion': {
+        const p01 = 1 - e.ttl / e.max;
+        ctx.globalAlpha = a;
+        const rr = e.r * (0.4 + p01 * 0.9);
+        const grad = ctx.createRadialGradient(e.pos.x, e.pos.y, 1, e.pos.x, e.pos.y, rr);
+        grad.addColorStop(0, 'rgba(255,240,180,0.95)');
+        grad.addColorStop(0.4, 'rgba(255,140,50,0.85)');
+        grad.addColorStop(0.8, 'rgba(120,60,20,0.5)');
+        grad.addColorStop(1, 'rgba(40,30,20,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, rr, 0, Math.PI * 2); ctx.fill();
+        // smoke ring
+        ctx.strokeStyle = `rgba(60,55,50,${0.5 * a})`; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, rr * 1.15, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'wreck': {
+        ctx.save(); ctx.translate(e.pos.x, e.pos.y); ctx.rotate(e.facing);
+        ctx.globalAlpha = Math.min(1, e.ttl / 8); // fades out at the end
+        ctx.fillStyle = '#26231f'; ctx.fillRect(-7, -5, 14, 10);
+        ctx.strokeStyle = '#4a443c'; ctx.lineWidth = 1; ctx.strokeRect(-7 + 0.5, -5 + 0.5, 13, 9);
+        // smoulder
+        const sm = 0.25 + 0.15 * Math.sin(state.time * 3 + e.pos.x);
+        ctx.fillStyle = `rgba(120,110,100,${sm})`;
+        ctx.beginPath(); ctx.arc(0, -6 - (state.time * 4 % 6), 3, 0, Math.PI * 2); ctx.fill();
+        ctx.restore(); ctx.globalAlpha = 1;
+        break;
+      }
       case 'flash':
         ctx.globalAlpha = a;
         ctx.fillStyle = C.flash; ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, 2.2, 0, Math.PI * 2); ctx.fill();
@@ -578,6 +625,40 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
       ctx.fillStyle = C.alarm; ctx.fillRect(bk.pos.x - 8, bk.pos.y - 11, 16 * (bk.hp / CONFIG.BUNKER_HP), 3);
     }
   }
+  // napalm strips: warning line during the run-in, then flames
+  for (const f of state.fires) {
+    const hw = CONFIG.NAPALM_HALF_W;
+    const ang = Math.atan2(f.b.y - f.a.y, f.b.x - f.a.x), nx = -Math.sin(ang) * hw, ny = Math.cos(ang) * hw;
+    if (f.delay > 0) {
+      ctx.strokeStyle = '#ff8c42'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(f.a.x, f.a.y); ctx.lineTo(f.b.x, f.b.y); ctx.stroke(); ctx.setLineDash([]);
+      continue;
+    }
+    ctx.globalAlpha = 0.32 + 0.10 * Math.sin(state.time * 11);
+    ctx.fillStyle = '#e25822';
+    ctx.beginPath(); ctx.moveTo(f.a.x + nx, f.a.y + ny); ctx.lineTo(f.b.x + nx, f.b.y + ny); ctx.lineTo(f.b.x - nx, f.b.y - ny); ctx.lineTo(f.a.x - nx, f.a.y - ny); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 0.55;
+    const L = Math.hypot(f.b.x - f.a.x, f.b.y - f.a.y);
+    for (let k = 0; k < L; k += 13) {
+      const t01 = k / Math.max(1, L);
+      const fx = f.a.x + (f.b.x - f.a.x) * t01 + Math.sin(state.time * 9 + k) * 4;
+      const fy = f.a.y + (f.b.y - f.a.y) * t01 + Math.cos(state.time * 7 + k) * 3;
+      const fr = 3 + 2 * Math.abs(Math.sin(state.time * 8 + k * 2));
+      ctx.fillStyle = k % 26 < 13 ? '#ffb347' : '#ff6b35';
+      ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // hidden fields: only the owner sees them (enemy learns the hard way)
+  for (const m of state.minefields) {
+    if (m.side !== me && !ui.revealAll) continue;
+    const col = m.kind === 'at' ? '#d97979' : '#c8a165';
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.7; ctx.lineWidth = 1; ctx.setLineDash([4, 5]);
+    ctx.beginPath(); ctx.arc(m.pos.x, m.pos.y, m.r, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = col; ctx.font = '8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(m.kind === 'at' ? `☒ AT ×${m.charges}` : `☠ ×${m.charges}`, m.pos.x, m.pos.y);
+    ctx.globalAlpha = 1;
+  }
   for (const sp of state.supplies) {
     if (sp.side !== me && !ui.revealAll && !(inOwnTerritory(state, me, sp.pos) && !concealsAt(state.grid, sp.pos))) continue;
     ctx.save(); ctx.translate(sp.pos.x, sp.pos.y);
@@ -645,6 +726,20 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
         ctx.lineWidth = m.ability === 'trench' ? CONFIG.TRENCH_HALF_W * 2 : 2; ctx.globalAlpha = 0.7;
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1;
       }
+    } else if (m.ability === 'napalm') {
+      ctx.strokeStyle = '#ff8c42';
+      if (m.stage === 0) { ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.stroke(); }
+      else {
+        const a = m.first!; let b = p; const L = dist(a, b);
+        if (L > CONFIG.NAPALM_MAX_LENGTH) b = v(a.x + ((b.x - a.x) * CONFIG.NAPALM_MAX_LENGTH) / L, a.y + ((b.y - a.y) * CONFIG.NAPALM_MAX_LENGTH) / L);
+        const ang = Math.atan2(b.y - a.y, b.x - a.x), nx = -Math.sin(ang) * CONFIG.NAPALM_HALF_W, ny = Math.cos(ang) * CONFIG.NAPALM_HALF_W;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.globalAlpha = 0.25; ctx.fillStyle = '#e25822';
+        ctx.beginPath(); ctx.moveTo(a.x + nx, a.y + ny); ctx.lineTo(b.x + nx, b.y + ny); ctx.lineTo(b.x - nx, b.y - ny); ctx.lineTo(a.x - nx, a.y - ny); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+      }
+    } else if (m.ability === 'traps' || m.ability === 'mines') {
+      ctx.strokeStyle = m.ability === 'mines' ? '#d97979' : '#c8a165';
+      ctx.beginPath(); ctx.arc(p.x, p.y, m.ability === 'mines' ? CONFIG.MINE_RADIUS : CONFIG.TRAP_RADIUS, 0, Math.PI * 2); ctx.stroke();
     } else if (m.ability === 'bunker') {
       ctx.strokeStyle = '#c8bfa5';
       ctx.strokeRect(p.x - 8, p.y - 6, 16, 12);

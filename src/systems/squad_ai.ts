@@ -6,7 +6,8 @@ import { aliveDots, isVehicle, type Dot, type GameState, type Side, type Squad }
 import { dist2, norm, sub, v, type Vec } from '../vec';
 import { rand } from '../rng';
 import { structureSpots } from './movement';
-import { pushEffect, squadCentroid, squadsInOrder } from '../state';
+import { killDot } from './combat';
+import { squadCentroid, squadsInOrder } from '../state';
 
 /** Can this shooter hurt that target at all? Small arms never damage armour (bible §9.4). */
 export function canDamage(state: GameState, shooter: Dot, target: Dot): boolean {
@@ -50,19 +51,38 @@ function targetValid(state: GameState, shooter: Dot): boolean {
 const candidates: Dot[] = [];
 const candD2: number[] = [];
 function acquire(state: GameState, shooter: Dot, enemies: Dot[]): void {
-  if (targetValid(state, shooter)) return; // stay on target — no flip-flopping
+  const isTank = state.squads[shooter.squadId]!.kind === 'tank';
+  if (targetValid(state, shooter)) {
+    // tanks drop an infantry target the moment enemy armour is in range — AT rounds first
+    if (!isTank || isVehicle(state.squads[state.dots[shooter.targetId]!.squadId]!.kind)) return;
+  }
   candidates.length = 0; candD2.length = 0;
   let bestD2 = Infinity;
+  let anyVehicle = false;
   for (const e of enemies) {
     if (!canDamage(state, shooter, e)) continue;
     const d2 = dist2(shooter.pos, e.pos);
     const r = rangeFor(state, shooter, e);
     if (d2 > r * r) continue;
     if (!canSpot(state, shooter, e, d2)) continue;
+    const veh = isVehicle(state.squads[e.squadId]!.kind);
+    if (veh) anyVehicle = true;
     candidates.push(e); candD2.push(d2);
     if (d2 < bestD2) bestD2 = d2;
   }
-  if (!candidates.length) { shooter.targetId = -1; return; }
+  // tank priority: enemy armour before infantry in mixed contact
+  if (isTank && anyVehicle) {
+    let n = 0;
+    bestD2 = Infinity;
+    for (let i = 0; i < candidates.length; i++) {
+      if (!isVehicle(state.squads[candidates[i]!.squadId]!.kind)) continue;
+      candidates[n] = candidates[i]!; candD2[n] = candD2[i]!;
+      if (candD2[n]! < bestD2) bestD2 = candD2[n]!;
+      n++;
+    }
+    candidates.length = n; candD2.length = n;
+  }
+  if (!candidates.length) { if (!targetValid(state, shooter)) shooter.targetId = -1; return; }
   // spread fire: any candidate not much farther than the nearest is fair game
   const limit = bestD2 * CONFIG.TARGET_PICK_SLACK ** 2;
   let n = 0;
@@ -104,9 +124,7 @@ export function threatDirection(state: GameState, squad: Squad, from: Vec): Vec 
 }
 
 function overrun(state: GameState, d: Dot): void {
-  d.alive = false; d.hp = 0; d.targetId = -1; d.coverSeek = null;
-  state.stats[d.side].casualties++;
-  pushEffect(state, { kind: 'death', pos: v(d.pos.x, d.pos.y), side: d.side, ttl: CONFIG.DEATH_TTL, max: CONFIG.DEATH_TTL });
+  killDot(state, d, 'overrun');
 }
 
 export function updateSquadAi(state: GameState): void {

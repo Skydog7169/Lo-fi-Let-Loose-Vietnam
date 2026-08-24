@@ -149,9 +149,9 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
       .filter((s) => s.id !== infiltratorId)
       .map((s) => ({ s, d: squadCenter(s) ? dist(squadCenter(s)!, activePos) : 9999 }))
       .sort((a, b) => a.d - b.d)
-      // defender keeps AI_POINT_SQUADS on the point and screens with the rest; attacker masses everything
-      // (numbers win firefights — see SUPERIORITY_RATIO), spreading squads around the point rather than stacking
-      .slice(0, attacking ? 99 : CONFIG.AI_POINT_SQUADS)
+      // 3 squads assault the circle; the rest support from the flanks — a whole army in one 60px
+      // circle is a splash-damage jackpot (HE/arty multi-kills), not a stronger attack
+      .slice(0, attacking ? 3 : CONFIG.AI_POINT_SQUADS)
       .map((x) => x.s);
     const pointIds = new Set(pointSquads.map((s) => s.id));
     // counter-attack: if the enemy is winning the circle, defenders assault the point instead of sitting on markers
@@ -180,21 +180,29 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
       const want = attacking ? { kind: 'attack' as const, pos: v(activePos.x - towardEnemy * 20, activePos.y) } : { kind: 'defend' as const, pos: v(activePos.x + dirToEnemy * -90, activePos.y + 20) };
       if (!s.marker || s.marker.kind !== want.kind || dist(s.marker.pos, want.pos) > 12) cmd.issueMarker(s.id, want.kind, want.pos);
     }
-    // fortify (defender): a bunker behind the point, wire across the enemy approach — WB permitting, garrison first
-    if (!attacking && vs.pub.phase === 'play') {
+    // faction WB attacks: the VC seed hidden fields on their ground; the US drops napalm on masses
+    const cluster = largestCluster(vs);
+    if (vs.pub.phase === 'play') {
       const wb = vs.own.res.wb;
       const cds = vs.own.cooldowns;
-      const bunkerNear = vs.defenses.bunkers.some((b) => b.side === side && dist(b.pos, activePos) < 150);
-      if (!bunkerNear && wb >= CONFIG.ABILITY.bunker!.cost + 200 && cds.bunker <= 0) {
-        cmd.buyAbility('bunker', v(activePos.x - dirToEnemy * -35, activePos.y + 18));
-      } else if (wb >= CONFIG.ABILITY.wire!.cost + 320 && cds.wire <= 0) {
-        const wx = activePos.x + dirToEnemy * -95; // in front of the point, facing the enemy
-        const near = vs.defenses.wires.some((w) => w.side === side && Math.abs((w.a.x + w.b.x) / 2 - wx) < 60 && Math.abs((w.a.y + w.b.y) / 2 - activePos.y) < 90);
-        if (!near) cmd.buyAbility('wire', v(wx, activePos.y - 55), v(wx, activePos.y + 55));
+      if (side === 'PAVN' && !attacking) {
+        // trap the infantry approach to the point, mine the road behind it for armour
+        if (wb >= CONFIG.ABILITY.traps!.cost + 250 && cds.traps <= 0) {
+          cmd.buyAbility('traps', v(activePos.x - dirToEnemy * -70, activePos.y + ((time | 0) % 10 < 5 ? 55 : -55)));
+        } else if (wb >= CONFIG.ABILITY.mines!.cost + 250 && cds.mines <= 0) {
+          cmd.buyAbility('mines', v(activePos.x - dirToEnemy * -55, activePos.y));
+        }
+      }
+      // napalm burns everyone: only drop it where none of our own squads are close
+      const ownNear = (p: Vec, r: number) => vs.own.squads.some((sq) => { const c = squadCenter(sq); return !!c && dist(c, p) < r; });
+      if (side === 'US' && cluster && cluster.members.length >= 5 && !ownNear(cluster.center, 110) && wb >= CONFIG.ABILITY.napalm!.cost + 200 && cds.napalm <= 0) {
+        let a = cluster.members[0]!, b = cluster.members[0]!, best = -1;
+        for (const p of cluster.members) for (const q of cluster.members) { const d = dist(p, q); if (d > best) { best = d; a = p; b = q; } }
+        if (best < 20) { a = v(cluster.center.x - 60, cluster.center.y); b = v(cluster.center.x + 60, cluster.center.y); }
+        cmd.buyAbility('napalm', a, b);
       }
     }
     // artillery battery: shell the largest visible cluster, else the active point when enemies are there
-    const cluster = largestCluster(vs);
     for (const s of vs.own.squads) {
       if (s.kind !== 'artillery') continue;
       const tgt = cluster ? cluster.center : vs.enemyDots.some((d) => dist(d.pos, activePos) < CONFIG.POINT_RADIUS) ? activePos : null;

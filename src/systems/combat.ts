@@ -37,13 +37,20 @@ export function isFlanking(shooter: Dot, target: Dot): boolean {
   return angleDiff(bearing, target.facing) >= FLANK_RAD;
 }
 
-function killDot(state: GameState, d: Dot): void {
+export function killDot(state: GameState, d: Dot, cause = 'smallarms'): void {
   d.alive = false;
   state.stats[d.side].casualties++;
+  state.stats[d.side].deathsBy[cause] = (state.stats[d.side].deathsBy[cause] ?? 0) + 1;
   d.hp = 0;
   d.targetId = -1;
   d.coverSeek = null;
-  pushEffect(state, { kind: 'death', pos: v(d.pos.x, d.pos.y), side: d.side, ttl: CONFIG.DEATH_TTL, max: CONFIG.DEATH_TTL });
+  if (isVehicle(state.squads[d.squadId]!.kind)) {
+    // brew-up: fireball, then a burnt-out wreck stays on the field
+    pushEffect(state, { kind: 'explosion', pos: v(d.pos.x, d.pos.y), r: 26, ttl: 1.1, max: 1.1 });
+    pushEffect(state, { kind: 'wreck', pos: v(d.pos.x, d.pos.y), facing: d.facing, ttl: 45, max: 45 });
+  } else {
+    pushEffect(state, { kind: 'death', pos: v(d.pos.x, d.pos.y), side: d.side, ttl: CONFIG.DEATH_TTL, max: CONFIG.DEATH_TTL });
+  }
 }
 
 /** Tank HE round: lands on (or near) the target, splashes every enemy infantry dot around the impact. */
@@ -71,7 +78,7 @@ export function heImpact(state: GameState, p: Vec, side: 'US' | 'PAVN'): void {
       let dmg = CONFIG.TANK_HE_DAMAGE;
       if (isCoverAt(state.grid, d.pos)) dmg *= CONFIG.TANK_HE_COVER_MULT;
       d.hp -= dmg;
-      if (d.hp <= 0) killDot(state, d);
+      if (d.hp <= 0) killDot(state, d, 'tank-he');
     }
     if (d.alive && d2 <= ur2) d.suppression = Math.min(1, d.suppression + CONFIG.TANK_HE_SUPPRESS);
   }
@@ -95,7 +102,16 @@ function damageStructures(state: GameState, p: Vec, dmg: number, r: number): voi
 function shoot(state: GameState, shooter: Dot, target: Dot): void {
   const ts = state.squads[target.squadId]!;
   const targetVehicle = isVehicle(ts.kind);
-  if (state.squads[shooter.squadId]!.kind === 'tank' && !targetVehicle) { fireHe(state, shooter, target); return; }
+  const ss = state.squads[shooter.squadId]!;
+  if (ss.kind === 'tank') {
+    // shell types: AT for armour, HE for infantry — loading the other type takes a moment
+    const need: 'he' | 'at' = targetVehicle ? 'at' : 'he';
+    if (shooter.ammo !== need) {
+      if (shooter.ammoSwapT <= 0) shooter.ammoSwapT = CONFIG.TANK_AMMO_SWAP_S;
+      return; // loading…
+    }
+    if (!targetVehicle) { fireHe(state, shooter, target); return; }
+  }
   const w = weaponFor(state, shooter, target);
   const flank = isFlanking(shooter, target);
   const covered = !targetVehicle && isCoverAt(state.grid, target.pos) && !flank;
@@ -128,7 +144,9 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
   // effects
   const jitter = landed ? 0 : 6;
   const end = v(target.pos.x + (rand(state.rng) - 0.5) * 2 * jitter, target.pos.y + (rand(state.rng) - 0.5) * 2 * jitter);
-  pushEffect(state, { kind: 'tracer', a: v(shooter.pos.x, shooter.pos.y), b: end, side: shooter.side, ttl: CONFIG.TRACER_TTL, max: CONFIG.TRACER_TTL, flank: flank && !targetVehicle });
+  const rocket = targetVehicle && (ss.kind === 'at' || ss.kind === 'tank'); // AT rockets / AP shells trail smoke
+  if (rocket) pushEffect(state, { kind: 'rocket', a: v(shooter.pos.x, shooter.pos.y), b: end, side: shooter.side, ttl: CONFIG.TRACER_TTL * 3, max: CONFIG.TRACER_TTL * 3 });
+  else pushEffect(state, { kind: 'tracer', a: v(shooter.pos.x, shooter.pos.y), b: end, side: shooter.side, ttl: CONFIG.TRACER_TTL, max: CONFIG.TRACER_TTL, flank: flank && !targetVehicle });
   pushEffect(state, { kind: 'flash', pos: v(shooter.pos.x, shooter.pos.y), side: shooter.side, ttl: CONFIG.FLASH_TTL, max: CONFIG.FLASH_TTL });
 }
 
@@ -154,7 +172,7 @@ export function shellImpact(state: GameState, p: Vec): void {
   for (const d of state.dots) {
     if (!d.alive) continue;
     const d2 = dist2(d.pos, p);
-    if (d2 <= sr2) { d.hp -= CONFIG.ARTY_SHELL_DAMAGE; if (d.hp <= 0) killDot(state, d); }
+    if (d2 <= sr2) { d.hp -= CONFIG.ARTY_SHELL_DAMAGE; if (d.hp <= 0) killDot(state, d, 'arty'); }
     if (d.alive && d2 <= ur2 && !isVehicle(state.squads[d.squadId]!.kind)) d.suppression = Math.min(1, d.suppression + CONFIG.ARTY_SUPPRESS);
   }
   // spawns: OPs are deleted by a near hit, garrisons lose hp and die after a few
@@ -223,7 +241,7 @@ function shootStructure(state: GameState, squad: Squad, d: Dot): void {
     }
   }
   const end = landed ? v(best.pos.x, best.pos.y) : v(best.pos.x + (rand(state.rng) - 0.5) * 16, best.pos.y + (rand(state.rng) - 0.5) * 16);
-  pushEffect(state, { kind: 'tracer', a: v(d.pos.x, d.pos.y), b: end, side: d.side, ttl: CONFIG.TRACER_TTL * 1.5, max: CONFIG.TRACER_TTL * 1.5 });
+  pushEffect(state, { kind: tank ? 'tracer' : 'rocket', a: v(d.pos.x, d.pos.y), b: end, side: d.side, ttl: CONFIG.TRACER_TTL * 2, max: CONFIG.TRACER_TTL * 2 });
   pushEffect(state, { kind: 'flash', pos: v(d.pos.x, d.pos.y), side: d.side, ttl: CONFIG.FLASH_TTL * 2, max: CONFIG.FLASH_TTL * 2 });
   pushEffect(state, { kind: 'impact', pos: end, r: 6, ttl: CONFIG.IMPACT_TTL * 0.6, max: CONFIG.IMPACT_TTL * 0.6 });
 }
@@ -236,6 +254,10 @@ export function updateCombat(state: GameState, dt: number): void {
       if (!d.alive) continue;
       d.suppression = Math.max(0, d.suppression - decay);
       d.fireCooldown -= dt;
+      if (d.ammoSwapT > 0) {
+        d.ammoSwapT -= dt;
+        if (d.ammoSwapT <= 0) d.ammo = d.ammo === 'he' ? 'at' : 'he'; // the other shell is now loaded
+      }
       if (squad.kind === 'artillery') { fireBattery(state, squad, d); continue; }
       if (d.targetId < 0) { if (!d.moving && (squad.kind === 'tank' || (squad.kind === 'at' && isAtGunner(d)))) shootStructure(state, squad, d); continue; }
       const t = state.dots[d.targetId];

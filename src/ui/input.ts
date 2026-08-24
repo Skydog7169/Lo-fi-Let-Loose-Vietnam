@@ -9,8 +9,8 @@ import { orderCardAt, startAbilityMode } from './orders';
 import { chipAt, focusSquad } from './roster';
 import { abilityError } from '../systems/abilities';
 import { draftError } from '../systems/draft';
-import { ABILITIES } from '../state';
-import { ABILITY_INFO } from './orders';
+
+import { ABILITY_INFO, sideAbilities } from './orders';
 import { clamp, dist, v, type Vec } from '../vec';
 
 export interface Camera { x: number; y: number; zoom: number }
@@ -164,7 +164,7 @@ export function attachInput(
       return;
     }
     if (e.button === 0) {
-      const card = orderCardAt(l);
+      const card = orderCardAt(l, ui.player);
       if (card) { if (st.phase === 'play') startAbilityMode(ui, card); return; }
       const chip = chipAt(st, ui, l);
       if (chip) { focusSquad(st, ui, chip); return; }
@@ -292,7 +292,8 @@ export function attachInput(
     if (e.key === 'g' || e.key === 'G') ui.mode = ui.mode.kind === 'placeGarrison' ? { kind: 'none' } : { kind: 'placeGarrison' };
     if (e.key === 'Escape') ui.mode = { kind: 'none' };
     const n = Number(e.key);
-    if (n >= 1 && n <= ABILITIES.length && state().phase === 'play') startAbilityMode(ui, ABILITIES[n - 1]!);
+    const list = sideAbilities(ui.player);
+    if (n >= 1 && n <= list.length && state().phase === 'play') startAbilityMode(ui, list[n - 1]!);
     if (e.key === 'Enter' && state().phase === 'setup') commanders[ui.player].setupDone();
   });
 }

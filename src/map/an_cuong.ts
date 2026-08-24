@@ -134,23 +134,24 @@ export const AN_CUONG: MapData = {
     { terrain: 'village', shape: { kind: 'rect', ...R(392, 372, 42, 20) } },
     { terrain: 'village', shape: { kind: 'rect', ...R(478, 310, 24, 20) } },
 
-    { terrain: 'village', shape: { kind: 'rect', ...R(800, 300, 32, 24) } },
-    { terrain: 'village', shape: { kind: 'rect', ...R(850, 296, 34, 26) } },
-    { terrain: 'village', shape: { kind: 'rect', ...R(806, 356, 28, 22) } },
-    { terrain: 'village', shape: { kind: 'rect', ...R(854, 354, 36, 24) } },
-    { terrain: 'village', shape: { kind: 'rect', ...R(796, 384, 40, 18) } },
-    { terrain: 'village', shape: { kind: 'rect', ...R(876, 326, 24, 20) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(720, 300, 32, 24) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(770, 296, 34, 26) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(726, 356, 28, 22) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(774, 354, 36, 24) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(716, 384, 40, 18) } },
+    { terrain: 'village', shape: { kind: 'rect', ...R(796, 326, 24, 20) } },
 
     // --- HQ zones (open, just flagged for spawning/fallback) ---
     { terrain: 'hq', shape: { kind: 'rect', ...R(0, 320, 90, 160) } },
     { terrain: 'hq', shape: { kind: 'rect', ...R(1110, 340, 90, 160) } },
   ],
+  // warfare-symmetric lane: P1/P5 and P2/P4 mirror about x=600; the middle sits just east of the river
   points: [
     { id: 1, name: 'PADDY WEST', pos: P(230, 420) },
     { id: 2, name: 'AN CUONG', pos: P(440, 330) },
-    { id: 3, name: 'RIVER BEND', pos: P(650, 450) },
-    { id: 4, name: 'HILL HAMLET', pos: P(840, 340) },
-    { id: 5, name: 'PADDY EAST', pos: P(1030, 430) },
+    { id: 3, name: 'RIVER BEND', pos: P(615, 450) },
+    { id: 4, name: 'HILL HAMLET', pos: P(760, 340) },
+    { id: 5, name: 'PADDY EAST', pos: P(970, 430) },
   ],
   hqs: [
     { side: 'US', rect: R(0, 320, 90, 160) },
@@ -164,13 +165,13 @@ export const AN_CUONG: MapData = {
     ],
     trenches: [
       { a: P(408, 296), b: P(408, 392), side: 'US' }, // An Cuong east face
-      { a: P(872, 300), b: P(872, 395), side: 'PAVN' }, // Hill Hamlet west face
+      { a: P(792, 300), b: P(792, 395), side: 'PAVN' }, // Hill Hamlet west face
       { a: P(610, 415), b: P(608, 470), side: 'US' }, // middle approaches
       { a: P(695, 420), b: P(697, 475), side: 'PAVN' },
     ],
     bunkers: [
       { pos: P(415, 345), side: 'US' },
-      { pos: P(865, 348), side: 'PAVN' },
+      { pos: P(785, 348), side: 'PAVN' },
     ],
   },
 };
