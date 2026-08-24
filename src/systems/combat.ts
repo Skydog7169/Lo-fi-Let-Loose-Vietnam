@@ -174,7 +174,20 @@ export function inTrench(state: GameState, p: Vec): boolean {
 }
 
 function inFriendlyBunker(state: GameState, d: Dot): boolean {
-  for (const b of state.bunkers) if (b.side === d.side && dist2(b.pos, d.pos) <= CONFIG.BUNKER_R ** 2) return true;
+  const r2 = CONFIG.BUNKER_R ** 2;
+  for (const b of state.bunkers) {
+    if (b.side !== d.side) continue;
+    const myD2 = dist2(b.pos, d.pos);
+    if (myD2 > r2) continue;
+    // capacity: only the closest BUNKER_CAPACITY men fit inside — the rest are just standing next to concrete
+    let closer = 0;
+    for (const o of state.dots) {
+      if (!o.alive || o.side !== d.side || o.id === d.id) continue;
+      if (dist2(b.pos, o.pos) < myD2) closer++;
+      if (closer >= CONFIG.BUNKER_CAPACITY) break;
+    }
+    if (closer < CONFIG.BUNKER_CAPACITY) return true;
+  }
   return false;
 }
 

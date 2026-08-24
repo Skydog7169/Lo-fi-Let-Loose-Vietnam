@@ -190,7 +190,7 @@ export function updateSquadAi(state: GameState): void {
       if (d.targetId >= 0 && !d.coverSeek && !vehicle && !isCoverAt(state.grid, d.pos)) {
         // nearest of terrain cover or a built defense (own bunker / any trench)
         let seek = nearbyCover(state, d.pos, vehicle);
-        for (const q of structureSpots(state, d.side, d.pos, CONFIG.COVER_SEEK_R)) {
+        for (const q of structureSpots(state, d.side, d.pos, CONFIG.COVER_SEEK_R, d.squadId)) {
           if (!seek || dist2(q, d.pos) < dist2(seek, d.pos)) seek = v(q.x, q.y);
         }
         d.coverSeek = seek;

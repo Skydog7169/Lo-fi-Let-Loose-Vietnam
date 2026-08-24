@@ -231,14 +231,43 @@ export function snapToTrench(state: GameState, p: Vec, r: number): Vec | null {
   return best;
 }
 
-/** Built defenses (own bunkers, any trench) near p — squads treat them like cover to occupy. */
-export function structureSpots(state: GameState, side: Side, p: Vec, R: number): Vec[] {
+/** Friendly presence (optionally excluding one squad) at q: dots already there, or squads
+ *  whose chosen defend spot is there and are still walking in (claims count too). */
+function occupancy(state: GameState, side: Side, q: Vec, r: number, excludeSquadId = -1): number {
+  const r2 = r * r;
+  let present = 0;
+  for (const d of state.dots) {
+    if (!d.alive || d.side !== side || d.squadId === excludeSquadId) continue;
+    if (dist2(d.pos, q) <= r2) present++;
+  }
+  let claimed = 0;
+  for (const sq of state.squads) {
+    if (sq.side !== side || sq.id === excludeSquadId || !sq.defendCache) continue;
+    if (dist2(sq.defendCache.spot, q) > r2) continue;
+    let alive = 0;
+    for (const id of sq.dotIds) if (state.dots[id]!.alive) alive++;
+    claimed += alive;
+  }
+  return Math.max(present, claimed);
+}
+
+/** Built defenses (own bunkers, any trench) near p that still have ROOM — full positions stop attracting
+ *  squads, so the best bunker doesn't herd every squad in the area onto one spot. */
+export function structureSpots(state: GameState, side: Side, p: Vec, R: number, excludeSquadId = -1, seekerCount = 1): Vec[] {
   const out: Vec[] = [];
   const R2 = R * R;
-  for (const b of state.bunkers) if (b.side === side && dist2(b.pos, p) <= R2) out.push(b.pos);
+  for (const b of state.bunkers) {
+    if (b.side !== side || dist2(b.pos, p) > R2) continue;
+    if (occupancy(state, side, b.pos, CONFIG.BUNKER_R, excludeSquadId) + seekerCount > CONFIG.BUNKER_CAPACITY) continue;
+    out.push(b.pos);
+  }
   for (const t of state.trenches) {
+    const L = dist(t.a, t.b);
+    const cap = Math.max(2, Math.floor(L / CONFIG.TRENCH_SPACING_PER_MAN));
+    const mid = v((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2);
+    if (occupancy(state, side, mid, L / 2 + CONFIG.TRENCH_HALF_W, excludeSquadId) + seekerCount > cap + 2) continue; // a little squeeze is fine
     // sample points along the trench line
-    const L = dist(t.a, t.b), n = Math.max(1, Math.floor(L / 14));
+    const n = Math.max(1, Math.floor(L / 14));
     for (let i = 0; i <= n; i++) {
       const q = v(t.a.x + ((t.b.x - t.a.x) * i) / n, t.a.y + ((t.b.y - t.a.y) * i) / n);
       if (dist2(q, p) <= R2) out.push(q);
@@ -270,8 +299,10 @@ function defendSpot(state: GameState, squad: Squad, marker: Vec): Vec {
     const score = d + (isEdge ? 0 : CONFIG.DEFEND_EDGE_BONUS);
     if (score < bestScore) { best = q; bestScore = score; }
   }
-  // built defenses beat terrain cover at equal distance: bunkers strongly, trenches slightly
-  for (const q of structureSpots(state, squad.side, marker, R)) {
+  // built defenses beat terrain cover at equal distance — but only ones the whole squad fits into
+  let squadAlive = 0;
+  for (const id of squad.dotIds) if (state.dots[id]!.alive) squadAlive++;
+  for (const q of structureSpots(state, squad.side, marker, R, squad.id, squadAlive)) {
     const score = dist(q, marker) - CONFIG.DEFEND_STRUCTURE_BONUS;
     if (score < bestScore) { best = v(q.x, q.y); bestScore = score; }
   }

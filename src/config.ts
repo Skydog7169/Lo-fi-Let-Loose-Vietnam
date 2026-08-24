@@ -254,6 +254,8 @@ export const CONFIG = {
   TRENCH_HIT_MULT: 0.6, // cover-grade protection for any dot in the trench (either side); flanking bypasses
   TRENCH_DMG_MULT: 0.7,
   BUNKER_R: 22, // friendly dots this close to the bunker fight from it
+  BUNKER_CAPACITY: 7, // …but only the closest 7 (one squad) get its protection; full bunkers stop attracting squads
+  TRENCH_SPACING_PER_MAN: 12, // a trench holds length/this men before it stops attracting more
   BUNKER_HIT_MULT: 0.45, // stronger than cover, and flanking does NOT bypass it
   BUNKER_DMG_MULT: 0.6,
   BUNKER_HP: 400, // shelled by tanks/AT/arty like a garrison
