@@ -119,7 +119,7 @@ function drawOverlay(ctx: CanvasRenderingContext2D, state: GameState, ui: UiStat
   } else if (state.phase === 'ended' && state.result) {
     const H = CONFIG.LOGICAL_H;
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = C.hudBg; ctx.fillRect(W / 2 - 240, H / 2 - 90, 480, 180);
+    ctx.fillStyle = C.hudBg; ctx.fillRect(W / 2 - 240, H / 2 - 90, 480, 280);
     const w = state.result.winner;
     const headline = w === null ? 'DRAW' : `${w} ${w === ui.player ? 'VICTORY' : 'WINS'}`;
     text(ctx, headline, W / 2, H / 2 - 60, w === null ? C.hudText : sideColor(w), 'bold 26px monospace', 'center');
@@ -137,7 +137,7 @@ function drawOverlay(ctx: CanvasRenderingContext2D, state: GameState, ui: UiStat
     for (const s2 of sides) for (const [k, n] of Object.entries(state.stats[s2].deathsBy)) pool[k] = (pool[k] ?? 0) + n;
     const causes = Object.entries(pool).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, n]) => `${k} ${n}`).join(' · ');
     if (causes) text(ctx, `killed by: ${causes}`, W / 2, H / 2 + 44, C.hudDim, '10px monospace', 'center');
-    text(ctx, 'reload to play again', W / 2, H / 2 + 70, C.hudDim, '10px monospace', 'center');
+
   }
 }
 

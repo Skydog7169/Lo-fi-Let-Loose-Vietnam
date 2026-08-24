@@ -12,7 +12,8 @@ import { profilePaths, runAiMatch, runMany, runScenario } from './devtools';
 import { makeCommanderAi } from './systems/commander_ai';
 import { drawOrders } from './ui/orders';
 import { drawRoster } from './ui/roster';
-import { drawDraft } from './ui/draft';
+import {drawDraft, defaultDraft} from './ui/draft';
+import { drawMenu } from './ui/menu';
 import { autoPlaceUsGarrisons } from './scenarios';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -20,6 +21,7 @@ const ctx = canvas.getContext('2d')!;
 
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed') ?? 1);
+let matchSeed = seed;
 const scenario = params.get('scenario') ?? CONFIG.SCENARIO;
 if (params.get('setup') === '0') (CONFIG as { SKIP_SETUP: boolean }).SKIP_SETUP = true;
 const urlMode = params.get('mode');
@@ -68,8 +70,30 @@ function frame(now: number): void {
   if (dt > CONFIG.MAX_FRAME_DT) dt = CONFIG.MAX_FRAME_DT;
   fps = fps * 0.9 + (1 / Math.max(dt, 1e-6)) * 0.1;
   acc += dt;
+  if (ui.menuOpen) acc = 0; // paused
   if (ui.toast) { ui.toast.t -= dt; if (ui.toast.t <= 0) ui.toast = null; }
   updateAudio(state, ui, dt);
+  if (ui.menuRequest) {
+    const req = ui.menuRequest;
+    ui.menuRequest = null;
+    if (req.kind === 'sound') { const m = toggleMute(); toast(ui, m ? 'sound muted' : 'sound on', 1.2); }
+    else if (req.kind === 'mode') { (CONFIG as { GAME_MODE: 'warfare' | 'offensive' }).GAME_MODE = req.mode; toast(ui, `next battle: ${req.mode.toUpperCase()}`, 2); }
+    else if (req.kind === 'ai') {
+      ui.aiLevel = req.level;
+      const preset = CONFIG.AI_DIFFICULTY_PRESETS[req.level]!;
+      (CONFIG as { AI_CADENCE: number }).AI_CADENCE = preset.cadence;
+      (CONFIG as { AI_BONUS_WB: number }).AI_BONUS_WB = preset.bonusWb;
+      toast(ui, `next battle: ${req.level.toUpperCase()} AI`, 2);
+    } else {
+      const newSeed = req.kind === 'new' ? (Date.now() % 100000) : matchSeed;
+      matchSeed = newSeed;
+      resetMatch(newSeed);
+      ui.menuOpen = false;
+      ui.mode = { kind: 'none' };
+      watched.garrisonsLost = 0; watched.active = -99; watched.owners = '';
+      toast(ui, req.kind === 'new' ? 'new battle' : 'rematch — same map', 2);
+    }
+  }
   // battlefield event feedback: sector flips and garrison losses
   {
     const st = state;
@@ -119,17 +143,27 @@ function render(): void {
   drawOrders(ctx, state, ui);
   drawRoster(ctx, state, ui);
   if (state.phase === 'draft') drawDraft(ctx, state, ui, ui.draft);
+  drawMenu(ctx, state, ui);
   ctx.restore();
 }
 
 requestAnimationFrame(frame);
+
+function resetMatch(s2: number, sc?: string): void {
+  state = createInitialState(s2, sc ?? state.scenario);
+  if (CONFIG.SKIP_SETUP && state.phase === 'setup') state.phase = 'play';
+  ai = makeCommanderAi('PAVN', commanders.PAVN, state.map, state.grid, s2);
+  autoPlaced = false;
+  ui.draft.done = false;
+  ui.draft.comp = defaultDraft();
+}
 
 // expose for console poking during development
 (window as unknown as { tacmap: unknown }).tacmap = {
   get state() { return state; },
   ui,
   commanders,
-  reset: (s: number, sc?: string) => { state = createInitialState(s, sc ?? state.scenario); ai = makeCommanderAi('PAVN', commanders.PAVN, state.map, state.grid, s); autoPlaced = false; ui.draft.done = false; },
+  reset: resetMatch,
   /** Advance the sim n ticks (AI included) and redraw — used for headless/background-tab testing. */
   step: (n: number) => { for (let i = 0; i < n; i++) tickOnce(); render(); },
   runAiMatch,

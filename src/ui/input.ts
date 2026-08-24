@@ -11,6 +11,7 @@ import { abilityError } from '../systems/abilities';
 import { draftError } from '../systems/draft';
 
 import { ABILITY_INFO, sideAbilities } from './orders';
+import { applyMenuClick, menuHit } from './menu';
 import { clamp, dist, v, type Vec } from '../vec';
 
 export interface Camera { x: number; y: number; zoom: number }
@@ -21,6 +22,10 @@ export interface UiState {
   cam: Camera;
   view: Viewport;
   mouseWorld: Vec | null;
+  mouseLogical: Vec | null;
+  menuOpen: boolean;
+  menuRequest: import('./menu').MenuRequest | null;
+  aiLevel: 'easy' | 'normal' | 'hard';
   hoverSquadId: number | null;
   drag:
     | { kind: 'pan'; startScreen: Vec; startCam: Vec }
@@ -50,6 +55,10 @@ export function createUiState(): UiState {
     cam: { x: 0, y: 0, zoom: CONFIG.CAM_MIN_ZOOM },
     view: { scale: 1, ox: 0, oy: 0, cssW: CONFIG.LOGICAL_W, cssH: CONFIG.LOGICAL_H },
     mouseWorld: null,
+    mouseLogical: null,
+    menuOpen: false,
+    menuRequest: null,
+    aiLevel: 'normal',
     hoverSquadId: null,
     drag: null,
     showPaths: CONFIG.DEBUG_DRAW_PATHS,
@@ -155,6 +164,13 @@ export function attachInput(
     const w = screenToWorld(ui, s);
     const st = state();
     // ---- UI layer first ----
+    if (ui.menuOpen || st.phase === 'ended') {
+      if (e.button === 0) {
+        const hit = menuHit(st, ui, l);
+        if (hit) { applyMenuClick(ui, hit); return; }
+      }
+      if (ui.menuOpen) return; // the pause panel swallows clicks
+    }
     if (st.phase === 'draft') {
       if (e.button !== 0) return;
       const hit = draftHit(l);
@@ -231,6 +247,7 @@ export function attachInput(
     const s = screenOf(e);
     const w = screenToWorld(ui, s);
     ui.mouseWorld = w;
+    ui.mouseLogical = screenToLogical(ui, s);
     if (ui.drag?.kind === 'pan') {
       const dx = (s.x - ui.drag.startScreen.x) / (ui.view.scale * ui.cam.zoom);
       const dy = (s.y - ui.drag.startScreen.y) / (ui.view.scale * ui.cam.zoom);
@@ -290,7 +307,7 @@ export function attachInput(
     if (e.key === 'r' || e.key === 'R') { ui.cam = { x: 0, y: 0, zoom: 1 }; }
     if (e.key === 'f' || e.key === 'F') ui.revealAll = !ui.revealAll;
     if (e.key === 'g' || e.key === 'G') ui.mode = ui.mode.kind === 'placeGarrison' ? { kind: 'none' } : { kind: 'placeGarrison' };
-    if (e.key === 'Escape') ui.mode = { kind: 'none' };
+    if (e.key === 'Escape') { if (ui.mode.kind !== 'none') ui.mode = { kind: 'none' }; else ui.menuOpen = !ui.menuOpen; }
     const n = Number(e.key);
     const list = sideAbilities(ui.player);
     if (n >= 1 && n <= list.length && state().phase === 'play') startAbilityMode(ui, list[n - 1]!);
