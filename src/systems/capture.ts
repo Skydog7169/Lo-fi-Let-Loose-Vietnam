@@ -1,8 +1,8 @@
 // Point control: the active point is contested by dot-count superiority inside
 // its circle; capture moves the sector line, adds time, and locks the point.
 import { CONFIG } from '../config';
-import { isVehicle, type GameState, type Side } from '../state';
-import { dist2 } from '../vec';
+import { isVehicle, pushEffect, type GameState, type Side } from '../state';
+import { dist2, v } from '../vec';
 
 export function updateCapture(state: GameState, dt: number): void {
   if (state.active >= state.points.length || state.active < 0) return;
@@ -44,10 +44,32 @@ export function updateCapture(state: GameState, dt: number): void {
   } else state.contestClearT = 0;
 }
 
+/** X-range of the sector band around point i (midpoints to the neighbours, HQ edges at the map ends). */
+export function sectorBounds(state: GameState, i: number): { x0: number; x1: number } {
+  const pts = state.map.points;
+  const cur = pts[i]!.pos.x;
+  const x0 = i > 0 ? (pts[i - 1]!.pos.x + cur) / 2 : 0;
+  const x1 = i < pts.length - 1 ? (pts[i + 1]!.pos.x + cur) / 2 : state.map.width;
+  return { x0, x1 };
+}
+
 function flipPoint(state: GameState, ps: GameState['points'][number], to: 'US' | 'PAVN'): void {
   ps.owner = to;
   ps.progress = 0;
   state.contestClearT = 0;
+  // HLL rule: taking the sector wipes every loser garrison and OP inside it — the victor's stay.
+  const loser: Side = to === 'US' ? 'PAVN' : 'US';
+  const idx = state.points.indexOf(ps);
+  const { x0, x1 } = sectorBounds(state, idx);
+  for (const g of state.garrisons) {
+    if (g.side !== loser || g.state === 'destroyed' || g.pos.x < x0 || g.pos.x >= x1) continue;
+    g.state = 'destroyed'; g.disabled = false;
+    state.stats[loser].garrisonsLost++;
+    pushEffect(state, { kind: 'impact', pos: v(g.pos.x, g.pos.y), r: 16, ttl: CONFIG.IMPACT_TTL * 1.5, max: CONFIG.IMPACT_TTL * 1.5 });
+  }
+  for (const sq of state.squads) {
+    if (sq.side === loser && sq.op && sq.op.x >= x0 && sq.op.x < x1) sq.op = null;
+  }
   state.active += to === 'US' ? 1 : -1;
   if (state.active >= 0 && state.active < state.points.length) state.points[state.active]!.progress = 0;
   if (state.mode !== 'warfare') state.timer += CONFIG.CAPTURE_BONUS_SECONDS;

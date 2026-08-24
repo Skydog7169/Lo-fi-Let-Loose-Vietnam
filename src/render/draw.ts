@@ -197,6 +197,8 @@ function drawChevronFlag(ctx: CanvasRenderingContext2D, pos: Vec, color: string,
 
 function drawSquad(ctx: CanvasRenderingContext2D, state: GameState, sq: Squad, ui: UiState): void {
   const col = sideColor(sq.side);
+  // readable at any zoom: dots keep a minimum on-screen size
+  const R = Math.max(CONFIG.DOT_RADIUS, CONFIG.DOT_MIN_SCREEN_PX / ui.cam.zoom);
   for (let i = 0; i < sq.dotIds.length; i++) {
     const d = state.dots[sq.dotIds[i]!]!;
     if (!d.alive || !visibleDot(state, ui, d)) continue;
@@ -204,23 +206,23 @@ function drawSquad(ctx: CanvasRenderingContext2D, state: GameState, sq: Squad, u
     if (sq.kind === 'artillery') { drawBattery(ctx, d, col); continue; }
     if (d.dugIn) { // entrenched: a small berm arc facing the dot's front
       ctx.strokeStyle = 'rgba(60,40,20,0.8)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS + 3, d.facing - 1.1, d.facing + 1.1); ctx.stroke();
+      ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, R + 3, d.facing - 1.1, d.facing + 1.1); ctx.stroke();
     }
     if (ui.hoverSquadId === sq.id) { // grabbable: halo on hovered squad
-      ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS + 3, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, R + 3, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
     }
-    ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, R, 0, Math.PI * 2);
     ctx.fillStyle = col; ctx.fill();
-    if (d.slot === 0) { ctx.strokeStyle = C.leaderRing; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, CONFIG.DOT_RADIUS + 1.5, 0, Math.PI * 2); ctx.stroke(); }
+    if (d.slot === 0) { ctx.strokeStyle = C.leaderRing; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, R + 1.5, 0, Math.PI * 2); ctx.stroke(); }
     // tiny facing tick
-    const f = fromAngle(d.facing, CONFIG.DOT_RADIUS + 2);
+    const f = fromAngle(d.facing, R + 2);
     ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(d.pos.x, d.pos.y); ctx.lineTo(d.pos.x + f.x, d.pos.y + f.y); ctx.stroke();
     // "pinned" chevrons above suppressed dots
     if (d.suppression > 0.5) {
       ctx.strokeStyle = C.suppressed; ctx.lineWidth = 1.2;
-      const y0 = d.pos.y - CONFIG.DOT_RADIUS - 3;
+      const y0 = d.pos.y - R - 3;
       for (let k = 0; k < (d.suppression > 0.85 ? 2 : 1); k++) {
         const y = y0 - k * 3;
         ctx.beginPath(); ctx.moveTo(d.pos.x - 3, y); ctx.lineTo(d.pos.x, y - 2.5); ctx.lineTo(d.pos.x + 3, y); ctx.stroke();

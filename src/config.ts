@@ -78,7 +78,8 @@ export const CONFIG = {
   SQUAD_SIZE: { infantry: 6, at: 6, recon: 4, tank: 1, artillery: 1 } as Record<string, number>,
   DOT_HP: 100,
   TANK_HP: 600,
-  DOT_RADIUS: 2,
+  DOT_RADIUS: 2.5,
+  DOT_MIN_SCREEN_PX: 2.4, // dots never render smaller than this on screen (zoomed out they grow in world units)
   FORMATION_WIDTH: 9, // wedge: lateral step per rank (px)
   FORMATION_DEPTH: 8, // wedge: rank depth behind the leader (px)
   DOT_SEPARATION: 10, // px; same-side dots push apart below this
