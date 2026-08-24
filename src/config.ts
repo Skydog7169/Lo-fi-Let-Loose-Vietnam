@@ -78,7 +78,7 @@ export const CONFIG = {
   SQUAD_SIZE: { infantry: 6, at: 6, recon: 2, tank: 1, artillery: 1 } as Record<string, number>, // recon = 2-man team (HLL)
   PERSONNEL: { infantry: 6, at: 6, recon: 2, tank: 3, artillery: 3 } as Record<string, number>, // troops a unit costs against ROSTER_CAP (tank = 3 crew)
   DOT_HP: 100,
-  TANK_HP: 600,
+  TANK_HP: 720, // beefed: a tank costs 250 WB + 3 crew, losing one should take real AT commitment
   DOT_RADIUS: 2.5,
   DOT_MIN_SCREEN_PX: 2.4, // dots never render smaller than this on screen (zoomed out they grow in world units)
   FORMATION_WIDTH: 9, // wedge: lateral step per rank (px)
@@ -92,7 +92,7 @@ export const CONFIG = {
   TARGET_SCAN_INTERVAL_TICKS: 6, // re-acquire targets ~10×/s
   INF_RANGE: 80,
   AT_RANGE_VS_ARMOR: 90,
-  TANK_RANGE: 150,
+  TANK_RANGE: 160,
   TANK_COVER_SPOT_RANGE: 60, // tanks only see concealed infantry this close (woods spotting penalty)
   INF_FIRE_INTERVAL: 0.75, // s between shots per dot
   INF_HIT_CHANCE: 0.13,
@@ -106,9 +106,9 @@ export const CONFIG = {
   TANK_HE_FIRE_INTERVAL: 2.5,
   TANK_HE_HIT_CHANCE: 0.7, // lands on the target; a miss scatters TANK_HE_SCATTER px
   TANK_HE_SCATTER: 14,
-  TANK_HE_DAMAGE: 55, // to every enemy infantry dot within TANK_HE_SPLASH_R
+  TANK_HE_DAMAGE: 62, // to every enemy infantry dot within TANK_HE_SPLASH_R
   TANK_HE_COVER_MULT: 0.5, // woods/buildings soak splash
-  TANK_HE_SPLASH_R: 18,
+  TANK_HE_SPLASH_R: 20,
   TANK_HE_SUPPRESS_R: 36,
   TANK_HE_SUPPRESS: 0.6,
   TANK_HE_FLIGHT: 0.35,
