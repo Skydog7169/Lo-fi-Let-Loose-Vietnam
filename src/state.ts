@@ -66,6 +66,7 @@ export interface Squad {
   shaken: boolean; // outnumbered and pinned: barely fires, easier to hit, can be overrun
   op: Vec | null; // this squad's outpost
   opRevealUntil: number; // spawn noise reveals the OP until this sim time
+  kills: number; // squad kill tally → veterancy chevrons
   opTimer: number; // seconds stationary near marker & out of combat
   lastCentroid: Vec | null;
   fallback: Vec | null; // where a FALLBACK squad is retreating to
@@ -93,8 +94,8 @@ export interface Resources { wb: number; mun: number; man: number; fuel: number 
 export interface PointState { id: number; owner: Side | null; progress: number } // offensive: 0..1 US capture. warfare: signed, +1 flips to US, −1 to PAVN. null owner = neutral middle
 
 export type MatchPhase = 'draft' | 'setup' | 'play' | 'ended';
-export type AbilityKind = 'recon' | 'strafe' | 'barrage' | 'supply' | 'garrison' | 'redeploy' | 'wire' | 'trench' | 'bunker' | 'napalm' | 'traps' | 'mines';
-export const ABILITIES: AbilityKind[] = ['recon', 'strafe', 'barrage', 'supply', 'garrison', 'redeploy', 'napalm', 'traps', 'mines']; // wire/trench/bunker retired from the panel
+export type AbilityKind = 'recon' | 'strafe' | 'barrage' | 'supply' | 'garrison' | 'redeploy' | 'wire' | 'trench' | 'bunker' | 'napalm' | 'traps' | 'mines' | 'smoke';
+export const ABILITIES: AbilityKind[] = ['recon', 'strafe', 'barrage', 'smoke', 'supply', 'garrison', 'redeploy', 'napalm', 'traps', 'mines']; // wire/trench/bunker retired from the panel
 export interface Recon { side: Side; pos: Vec; r: number; t: number }
 export interface Supply { side: Side; pos: Vec; t: number }
 export interface Wire { side: Side; a: Vec; b: Vec; hp: number } // slows infantry crossing; crushed by vehicles slowly, blown by explosives
@@ -102,6 +103,7 @@ export interface Trench { side: Side; a: Vec; b: Vec } // cover-grade protection
 export interface Bunker { side: Side; pos: Vec; hp: number } // strong cover for friendlies near it; shelled like a garrison
 export interface Fire { side: Side; a: Vec; b: Vec; delay: number; t: number } // napalm strip: ignition then burn
 export interface Minefield { side: Side; pos: Vec; r: number; charges: number; kind: 'ap' | 'at' } // hidden from the enemy
+export interface Smoke { pos: Vec; r: number; t: number; max: number } // vision blocker, drifts and fades
 export interface Strafe { side: Side; a: Vec; b: Vec; delay: number; t: number; progress: number } // t = remaining sweep
 export interface Barrage { side: Side; pos: Vec; r: number; delay: number; t: number; shellsLeft: number; nextShell: number }
 
@@ -143,7 +145,7 @@ export interface GameState {
   dots: Dot[];
   pendingCommands: Command[];
   effects: Effect[];
-  shells: { to: Vec; t: number; side: Side; kind: 'arty' | 'he' }[]; // rounds in flight
+  shells: { to: Vec; t: number; side: Side; kind: 'arty' | 'he'; squadId?: number }[]; // rounds in flight
   scenario: string;
   // ---- match ----
   phase: MatchPhase;
@@ -171,6 +173,7 @@ export interface GameState {
   bunkers: Bunker[];
   fires: Fire[];
   minefields: Minefield[];
+  smokes: Smoke[];
   strafes: Strafe[];
   barrages: Barrage[];
   tankRespawns: Record<number, number>; // by squad id
@@ -194,6 +197,7 @@ export function createSquad(state: GameState, side: Side, kind: SquadKind, label
     shaken: false,
     op: null,
     opRevealUntil: 0,
+    kills: 0,
     opTimer: 0,
     lastCentroid: null,
     fallback: null,
@@ -300,6 +304,7 @@ export function createEmptyState(seed: number, scenario: string, mode: 'warfare'
     bunkers: [],
     fires: [],
     minefields: [],
+    smokes: [],
     strafes: [],
     barrages: [],
     tankRespawns: {},
@@ -307,7 +312,7 @@ export function createEmptyState(seed: number, scenario: string, mode: 'warfare'
   return state;
 }
 
-export const zeroCooldowns = (): Record<AbilityKind, number> => ({ recon: 0, strafe: 0, barrage: 0, supply: 0, garrison: 0, redeploy: 0, wire: 0, trench: 0, bunker: 0, napalm: 0, traps: 0, mines: 0 });
+export const zeroCooldowns = (): Record<AbilityKind, number> => ({ recon: 0, strafe: 0, barrage: 0, supply: 0, garrison: 0, redeploy: 0, wire: 0, trench: 0, bunker: 0, napalm: 0, traps: 0, mines: 0, smoke: 0 });
 
 export function emptyVisible(side: Side): VisibleState {
   return { side, own: { squads: [], garrisons: [], res: { wb: 0, mun: 0, man: 0, fuel: 0 }, cooldowns: zeroCooldowns(), supplies: [] }, defenses: { wires: [], trenches: [], bunkers: [] }, pub: { points: [], active: 0, sectorX: 0, timer: 0, phase: 'draft', mode: 'offensive' }, enemyDots: [], enemyGarrisons: [], enemyOps: [], ghosts: [], dotVisible: new Uint8Array(0), garrisonVisible: new Uint8Array(0), opVisible: new Uint8Array(0) };
@@ -359,6 +364,11 @@ export function pointsHeld(state: GameState, side: Side): number {
   let n = 0;
   for (const p of state.points) if (p.owner === side) n++;
   return n;
+}
+
+export function vetLevel(sq: Squad): number {
+  const t = CONFIG.VET_KILLS;
+  return sq.kills >= t[1]! ? 2 : sq.kills >= t[0]! ? 1 : 0;
 }
 
 export const isVehicle = (k: SquadKind): boolean => k === 'tank';

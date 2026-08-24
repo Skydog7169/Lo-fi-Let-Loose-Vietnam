@@ -3,7 +3,7 @@
 import { CONFIG } from '../config';
 import { cellCenter, cellOf, concealsAt, isCoverAt, isWalkable } from '../map/grid';
 import { aliveDots, isVehicle, type Dot, type GameState, type Side, type Squad } from '../state';
-import { dist2, norm, sub, v, type Vec } from '../vec';
+import { dist2, distToSegment2, norm, sub, v, type Vec } from '../vec';
 import { rand } from '../rng';
 import { structureSpots } from './movement';
 import { killDot } from './combat';
@@ -31,9 +31,18 @@ export function rangeFor(state: GameState, shooter: Dot, target: Dot): number {
 
 /** Can the shooter see the target well enough to shoot? Side-level fog of war (vision.ts) plus the
  *  tank concealment penalty. */
+/** Does the sight line a→b pass through (or end inside) a smoke cloud? */
+export function smokeBlocks(state: GameState, a: Vec, b: Vec): boolean {
+  for (const sm of state.smokes) {
+    if (distToSegment2(sm.pos, a, b) <= sm.r * sm.r) return true;
+  }
+  return false;
+}
+
 export function canSpot(state: GameState, shooter: Dot, target: Dot, d2: number): boolean {
   const vis = state.vis[shooter.side].dotVisible;
   if (vis.length > target.id && vis[target.id] !== 1 && !CONFIG.DEBUG_REVEAL_ALL) return false;
+  if (state.smokes.length && smokeBlocks(state, shooter.pos, target.pos)) return false;
   const ss = state.squads[shooter.squadId]!;
   if (ss.kind === 'tank' && concealsAt(state.grid, target.pos)) return d2 <= CONFIG.TANK_COVER_SPOT_RANGE ** 2;
   return true;

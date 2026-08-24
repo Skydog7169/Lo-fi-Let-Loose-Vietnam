@@ -3,7 +3,7 @@
 import { CONFIG } from '../config';
 import type { GameState, Squad } from '../state';
 import { spawnPointFor } from '../systems/spawning';
-import { squadCentroid } from '../state';
+import { squadCentroid , vetLevel} from '../state';
 import type { UiState } from './input';
 import { sideColor } from '../render/draw';
 import { clamp, type Vec } from '../vec';
@@ -53,6 +53,8 @@ export function drawRoster(ctx: CanvasRenderingContext2D, state: GameState, ui: 
     ctx.fillStyle = C.hudText; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left';
     ctx.fillText(`${sq.label} ${KIND_SHORT[sq.kind] ?? sq.kind}`, x + 9, y + 9);
     // state
+    const vl = vetLevel(sq);
+    if (vl > 0) { ctx.fillStyle = '#f2d27a'; ctx.font = '8px monospace'; ctx.textAlign = 'left'; ctx.fillText(vl === 2 ? '★★' : '★', x + 40, y + 9); }
     const dug = sq.dotIds.some((id) => state.dots[id]!.alive && state.dots[id]!.dugIn);
     ctx.fillStyle = dug && sq.state === 'IDLE' ? '#c8a165' : STATE_COL[sq.state] ?? C.hudDim; ctx.font = '8px monospace'; ctx.textAlign = 'right';
     ctx.fillText(dug && sq.state === 'IDLE' ? 'DUG IN' : sq.state, x + CHIP_W - 5, y + 9);

@@ -92,7 +92,7 @@ function drawBottom(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState
     : '';
   text(ctx, `tick ${state.tick}  fps ${fps.toFixed(0)}  zoom ${ui.cam.zoom.toFixed(2)}${ui.revealAll ? '  [REVEAL ALL]' : ''}${modeTxt}`, 8, H - 11, modeTxt ? '#f2d27a' : C.hudDim, '10px monospace');
   // the controls reference yields to an active mode hint — the two lines share the bar
-  if (!modeTxt) text(ctx, 'drag squad/flag: attack · right-drag: defend · drag garrison: move · orange = flank fire · 1–9: orders · G: garrison', W - 8, H - 11, C.hudDim, '10px monospace', 'right');
+  if (!modeTxt) text(ctx, 'drag squad/flag: attack · right-drag: defend · drag garrison: move · orange = flank fire · 1–9: orders · G: garrison · M: sound', W - 8, H - 11, C.hudDim, '10px monospace', 'right');
 
 }
 

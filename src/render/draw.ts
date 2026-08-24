@@ -2,7 +2,7 @@
 // The static map layer is rendered once to an offscreen canvas at 2× and blitted.
 import { CONFIG } from '../config';
 import { pointInShape, type MapData, type Shape } from '../map/an_cuong';
-import { inOwnTerritory, territoryEdgeX, type Dot, type GameState, type Garrison, type Side, type Squad } from '../state';
+import { inOwnTerritory, territoryEdgeX, vetLevel, type Dot, type GameState, type Garrison, type Side, type Squad } from '../state';
 import { concealsAt } from '../map/grid';
 import { spawnLocked } from '../systems/spawning';
 import { garrisonPlacementError } from '../commander';
@@ -281,7 +281,11 @@ function drawSquad(ctx: CanvasRenderingContext2D, state: GameState, sq: Squad, u
     }
     ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, R, 0, Math.PI * 2);
     ctx.fillStyle = col; ctx.fill();
-    if (d.slot === 0) { ctx.strokeStyle = C.leaderRing; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, R + 1.5, 0, Math.PI * 2); ctx.stroke(); }
+    if (d.slot === 0) {
+      ctx.strokeStyle = C.leaderRing; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, R + 1.5, 0, Math.PI * 2); ctx.stroke();
+      const vl = vetLevel(sq);
+      if (vl > 0) { ctx.fillStyle = '#f2d27a'; ctx.font = `${6 + vl}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(vl === 2 ? '★★' : '★', d.pos.x, d.pos.y - R - 3); }
+    }
     // tiny facing tick
     const f = fromAngle(d.facing, R + 2);
     ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
@@ -649,6 +653,17 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
     }
     ctx.globalAlpha = 1;
   }
+  // smoke: soft drifting clouds, visible to everyone
+  for (const sm of state.smokes) {
+    const a2 = Math.min(1, sm.t / 4) * 0.55; // fades out over the last seconds
+    const grad = ctx.createRadialGradient(sm.pos.x, sm.pos.y, 2, sm.pos.x, sm.pos.y, sm.r);
+    grad.addColorStop(0, `rgba(210,208,200,${a2})`);
+    grad.addColorStop(0.7, `rgba(185,183,175,${a2 * 0.8})`);
+    grad.addColorStop(1, 'rgba(170,168,160,0)');
+    ctx.fillStyle = grad;
+    const wob = Math.sin(state.time * 0.9 + sm.pos.x) * 3;
+    ctx.beginPath(); ctx.arc(sm.pos.x + wob, sm.pos.y, sm.r, 0, Math.PI * 2); ctx.fill();
+  }
   // hidden fields: only the owner sees them (enemy learns the hard way)
   for (const m of state.minefields) {
     if (m.side !== me && !ui.revealAll) continue;
@@ -725,6 +740,17 @@ export function drawWorld(ctx: CanvasRenderingContext2D, staticLayer: HTMLCanvas
         if (L > maxL) b = v(a.x + ((b.x - a.x) * maxL) / L, a.y + ((b.y - a.y) * maxL) / L);
         ctx.lineWidth = m.ability === 'trench' ? CONFIG.TRENCH_HALF_W * 2 : 2; ctx.globalAlpha = 0.7;
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1;
+      }
+    } else if (m.ability === 'smoke') {
+      ctx.strokeStyle = '#c9c7bf';
+      if (m.stage === 0) { ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.stroke(); }
+      else {
+        const a3 = m.first!; let b3 = p; const L = dist(a3, b3);
+        if (L > CONFIG.SMOKE_MAX_LENGTH) b3 = v(a3.x + ((b3.x - a3.x) * CONFIG.SMOKE_MAX_LENGTH) / L, a3.y + ((b3.y - a3.y) * CONFIG.SMOKE_MAX_LENGTH) / L);
+        ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(a3.x, a3.y); ctx.lineTo(b3.x, b3.y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.globalAlpha = 0.3;
+        for (let i = 0; i <= 4; i++) { ctx.beginPath(); ctx.arc(a3.x + ((b3.x - a3.x) * i) / 4, a3.y + ((b3.y - a3.y) * i) / 4, CONFIG.SMOKE_PUFF_R, 0, Math.PI * 2); ctx.stroke(); }
+        ctx.globalAlpha = 1;
       }
     } else if (m.ability === 'napalm') {
       ctx.strokeStyle = '#ff8c42';

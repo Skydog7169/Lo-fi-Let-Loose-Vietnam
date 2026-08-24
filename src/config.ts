@@ -91,7 +91,7 @@ export const CONFIG = {
   // ---- Combat (bible §9) ----
   TARGET_SCAN_INTERVAL_TICKS: 6, // re-acquire targets ~10×/s
   INF_RANGE: 80,
-  AT_RANGE_VS_ARMOR: 90,
+  AT_RANGE_VS_ARMOR: 115, // rockets outreach the tank·s ability to spot concealed shooters — ambushes land first
   TANK_RANGE: 160,
   TANK_COVER_SPOT_RANGE: 60, // tanks only see concealed infantry this close (woods spotting penalty)
   INF_FIRE_INTERVAL: 0.75, // s between shots per dot
@@ -101,7 +101,7 @@ export const CONFIG = {
   AT_GUNNERS_PER_SQUAD: 2, // slots 1..N of an AT squad carry the AT weapon
   AT_FIRE_INTERVAL: 2.4,
   AT_HIT_CHANCE: 0.6,
-  AT_DAMAGE: 150,
+  AT_DAMAGE: 185,
   // tank: HE rounds vs infantry (area), AP vs armour. Tanks stand off — they never push/close like infantry.
   TANK_HE_FIRE_INTERVAL: 2.5,
   TANK_HE_HIT_CHANCE: 0.7, // lands on the target; a miss scatters TANK_HE_SCATTER px
@@ -114,6 +114,11 @@ export const CONFIG = {
   TANK_HE_FLIGHT: 0.35,
   TANK_STANDOFF_FRACTION: 0.9, // tanks hold at this × range and never close further
   TANK_AMMO_SWAP_S: 4, // loading the other shell type takes this long (AT vs armour, HE vs infantry)
+  // facing armour: damage to a tank scales with the attack bearing vs its facing
+  TANK_FRONT_ARC_DEG: 60, // within this of head-on = front
+  TANK_REAR_ARC_DEG: 120, // beyond this = rear
+  TANK_FRONT_DMG_MULT: 0.6,
+  TANK_REAR_DMG_MULT: 1.4,
   TANK_GUN_FIRE_INTERVAL: 3.0,
   TANK_GUN_HIT_CHANCE: 0.6,
   TANK_GUN_DAMAGE: 150,
@@ -246,6 +251,7 @@ export const CONFIG = {
     napalm: { cost: 300, pool: 'wb', cooldown: 240, side: 'US' },
     traps: { cost: 150, pool: 'wb', cooldown: 120, side: 'PAVN' },
     mines: { cost: 100, pool: 'wb', cooldown: 90, side: 'PAVN' },
+    smoke: { cost: 75, pool: 'wb', cooldown: 90 },
   } as Record<string, { cost: number; pool: 'wb' | 'mun' | 'man' | 'fuel'; cooldown: number; side?: 'US' | 'PAVN' }>,
   // ---- Napalm (US): a burning strip — fire ignores cover and keeps burning ----
   NAPALM_MAX_LENGTH: 260,
@@ -309,6 +315,16 @@ export const CONFIG = {
   DIG_IN_HIT_MULT: 0.65, // like cover: incoming hit chance ×, damage × (does NOT conceal)
   DIG_IN_DMG_MULT: 0.75,
   DIG_IN_MOVE_BREAK: 6, // px a dot may drift before its entrenchment is lost
+
+  // ---- Veterancy: squads learn from kills ----
+  VET_KILLS: [6, 15] as number[], // kills for chevron 1 / 2
+  VET_ACC_MULT: [1, 1.1, 1.2] as number[],
+  VET_SUPP_RECOVERY: [1, 1.15, 1.3] as number[], // suppression decays faster for veterans
+
+  // ---- Smoke screen ----
+  SMOKE_MAX_LENGTH: 200,
+  SMOKE_PUFF_R: 34,
+  SMOKE_DURATION: 25,
 
   // ---- Commander AI (bible §10.2) ----
   AI_DIFFICULTY: 'normal' as 'easy' | 'normal' | 'hard', // the one knob; ?ai=easy|normal|hard overrides

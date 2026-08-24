@@ -19,6 +19,7 @@ export const ABILITY_INFO: Record<AbilityKind, { name: string; hint: string; mod
   wire: { name: 'BARBED WIRE', hint: 'line · slows inf', mode: 'line' },
   trench: { name: 'TRENCH', hint: 'line · cover in it', mode: 'line' },
   bunker: { name: 'BUNKER', hint: 'strong cover · 400hp', mode: 'point' },
+  smoke: { name: 'SMOKE SCREEN', hint: 'line · blocks vision', mode: 'line' },
   napalm: { name: 'NAPALM', hint: 'line · burns thru cover', mode: 'line' },
   traps: { name: 'BOOBY TRAPS', hint: 'hidden field vs inf', mode: 'circle' },
   mines: { name: 'AT MINES', hint: 'hidden field vs armour', mode: 'circle' },

@@ -3,7 +3,7 @@
 import { CONFIG } from '../config';
 import { isCoverAt } from '../map/grid';
 import { rand } from '../rng';
-import { isVehicle, pushEffect, squadsInOrder, type Bunker, type Dot, type Garrison, type GameState, type Squad } from '../state';
+import { isVehicle, pushEffect, squadsInOrder, vetLevel, type Bunker, type Dot, type Garrison, type GameState, type Squad } from '../state';
 import { angleOf, dist2, distToSegment2, fromAngle, sub, v, type Vec } from '../vec';
 import { isAtGunner } from './squad_ai';
 
@@ -59,7 +59,7 @@ function fireHe(state: GameState, shooter: Dot, target: Dot): void {
   const landed = rand(state.rng) < w.hit * (1 - CONFIG.SUPPRESS_ACC_MULT_MAX * shooter.suppression);
   const ang = rand(state.rng) * Math.PI * 2, sc = landed ? 0 : CONFIG.TANK_HE_SCATTER * (0.5 + 0.5 * rand(state.rng));
   const to = v(target.pos.x + Math.cos(ang) * sc, target.pos.y + Math.sin(ang) * sc);
-  state.shells.push({ to, t: CONFIG.TANK_HE_FLIGHT, side: shooter.side, kind: 'he' });
+  state.shells.push({ to, t: CONFIG.TANK_HE_FLIGHT, side: shooter.side, kind: 'he', squadId: shooter.squadId });
   shooter.firedAt = state.time;
   shooter.fireCooldown = w.interval;
   shooter.facing = angleOf(sub(target.pos, shooter.pos));
@@ -67,7 +67,7 @@ function fireHe(state: GameState, shooter: Dot, target: Dot): void {
   pushEffect(state, { kind: 'flash', pos: v(shooter.pos.x, shooter.pos.y), side: shooter.side, ttl: CONFIG.FLASH_TTL * 2, max: CONFIG.FLASH_TTL * 2 });
 }
 
-export function heImpact(state: GameState, p: Vec, side: 'US' | 'PAVN'): void {
+export function heImpact(state: GameState, p: Vec, side: 'US' | 'PAVN', creditSquadId = -1): void {
   const sr2 = CONFIG.TANK_HE_SPLASH_R ** 2, ur2 = CONFIG.TANK_HE_SUPPRESS_R ** 2;
   for (const d of state.dots) {
     if (!d.alive || d.side === side) continue; // HE only hurts the enemy (no friendly fire on your own pushing squads)
@@ -78,7 +78,7 @@ export function heImpact(state: GameState, p: Vec, side: 'US' | 'PAVN'): void {
       let dmg = CONFIG.TANK_HE_DAMAGE;
       if (isCoverAt(state.grid, d.pos)) dmg *= CONFIG.TANK_HE_COVER_MULT;
       d.hp -= dmg;
-      if (d.hp <= 0) killDot(state, d, 'tank-he');
+      if (d.hp <= 0) { killDot(state, d, 'tank-he'); const cs = state.squads[creditSquadId]; if (cs) cs.kills++; }
     }
     if (d.alive && d2 <= ur2) d.suppression = Math.min(1, d.suppression + CONFIG.TANK_HE_SUPPRESS);
   }
@@ -118,8 +118,19 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
   const bunkered = !targetVehicle && inFriendlyBunker(state, target); // enclosed: flanking does not bypass
   const trenched = !targetVehicle && !covered && !bunkered && !flank && inTrench(state, target.pos);
   const dug = !targetVehicle && !covered && !bunkered && !trenched && !!target.dugIn && !flank;
-  let hit = w.hit * (1 - CONFIG.SUPPRESS_ACC_MULT_MAX * shooter.suppression);
+  let hit = w.hit * (1 - CONFIG.SUPPRESS_ACC_MULT_MAX * shooter.suppression) * (ss.kind === 'tank' ? 1 : CONFIG.VET_ACC_MULT[vetLevel(ss)] ?? 1); // crews don't vet — infantry do
   let dmg = w.dmg;
+  if (targetVehicle && ts.kind === 'tank') {
+    // facing armour: front plate sheds hits, rear is soft. An UNSPOTTED shooter always gets rear-shot
+    // effect — an ambush the crew never saw beats the armour scheme.
+    const spotted = state.vis[target.side].dotVisible[shooter.id] === 1;
+    if (!spotted) dmg *= CONFIG.TANK_REAR_DMG_MULT;
+    else {
+      const bearing = Math.abs(angleDiff(angleOf(sub(shooter.pos, target.pos)), target.facing));
+      const deg = (bearing * 180) / Math.PI;
+      dmg *= deg <= CONFIG.TANK_FRONT_ARC_DEG ? CONFIG.TANK_FRONT_DMG_MULT : deg >= CONFIG.TANK_REAR_ARC_DEG ? CONFIG.TANK_REAR_DMG_MULT : 1;
+    }
+  }
   if (bunkered) { hit *= CONFIG.BUNKER_HIT_MULT; dmg *= CONFIG.BUNKER_DMG_MULT; }
   else if (covered) { hit *= CONFIG.COVER_HIT_MULT; dmg *= CONFIG.COVER_DMG_MULT; }
   else if (trenched) { hit *= CONFIG.TRENCH_HIT_MULT; dmg *= CONFIG.TRENCH_DMG_MULT; }
@@ -132,7 +143,7 @@ function shoot(state: GameState, shooter: Dot, target: Dot): void {
   const landed = rand(state.rng) < hit;
   if (landed) {
     target.hp -= dmg;
-    if (target.hp <= 0) killDot(state, target);
+    if (target.hp <= 0) { killDot(state, target); ss.kills++; }
   }
   // suppression on hit or near miss (vehicles immune); flank/rear fire rattles harder
   if (!targetVehicle) target.suppression = Math.min(1, target.suppression + CONFIG.SUPPRESS_PER_SHOT * (flank ? CONFIG.FLANK_SUPPRESS_MULT : 1));
@@ -252,7 +263,7 @@ export function updateCombat(state: GameState, dt: number): void {
     for (const id of squad.dotIds) {
       const d = state.dots[id]!;
       if (!d.alive) continue;
-      d.suppression = Math.max(0, d.suppression - decay);
+      d.suppression = Math.max(0, d.suppression - decay * (CONFIG.VET_SUPP_RECOVERY[vetLevel(squad)] ?? 1));
       d.fireCooldown -= dt;
       if (d.ammoSwapT > 0) {
         d.ammoSwapT -= dt;
@@ -271,7 +282,7 @@ export function updateCombat(state: GameState, dt: number): void {
   for (let i = state.shells.length - 1; i >= 0; i--) {
     const s = state.shells[i]!;
     s.t -= dt;
-    if (s.t <= 0) { if (s.kind === 'he') heImpact(state, s.to, s.side); else shellImpact(state, s.to); state.shells.splice(i, 1); }
+    if (s.t <= 0) { if (s.kind === 'he') heImpact(state, s.to, s.side, s.squadId ?? -1); else shellImpact(state, s.to); state.shells.splice(i, 1); }
   }
   // effects ttl
   const fx = state.effects;

@@ -5,6 +5,7 @@ import { type Side } from './state';
 import { createInitialState } from './scenarios';
 import { stepSim, TICK_DT } from './sim';
 import { toast, attachInput, createUiState, updateViewport } from './ui/input';
+import { initAudio, toggleMute, updateAudio } from './audio';
 import { drawHud } from './ui/hud';
 import { buildStaticLayer, drawWorld } from './render/draw';
 import { profilePaths, runAiMatch, runMany, runScenario } from './devtools';
@@ -57,6 +58,8 @@ attachInput(canvas, () => state, ui, commanders);
 
 let last = performance.now();
 let acc = 0;
+window.addEventListener('pointerdown', () => initAudio(), { once: false });
+window.addEventListener('keydown', (e) => { initAudio(); if (e.key === 'm' || e.key === 'M') { const m = toggleMute(); toast(ui, m ? 'sound muted' : 'sound on', 1.2); } });
 const watched = { garrisonsLost: 0, active: -99, owners: '' };
 let fps = 0;
 function frame(now: number): void {
@@ -66,6 +69,7 @@ function frame(now: number): void {
   fps = fps * 0.9 + (1 / Math.max(dt, 1e-6)) * 0.1;
   acc += dt;
   if (ui.toast) { ui.toast.t -= dt; if (ui.toast.t <= 0) ui.toast = null; }
+  updateAudio(state, ui, dt);
   // battlefield event feedback: sector flips and garrison losses
   {
     const st = state;

@@ -53,6 +53,9 @@ export function abilityError(state: GameState, side: Side, ability: AbilityKind,
       if (CONFIG.ABILITY.napalm!.side && side !== CONFIG.ABILITY.napalm!.side) return 'target';
       if (!pos2) return 'target';
       return null;
+    case 'smoke':
+      if (!pos2) return 'target';
+      return null;
     case 'traps':
     case 'mines':
       if (CONFIG.ABILITY[ability]!.side && side !== CONFIG.ABILITY[ability]!.side) return 'target';
@@ -111,6 +114,15 @@ export function buyAbility(state: GameState, side: Side, ability: AbilityKind, p
     case 'napalm':
       state.fires.push({ side, a: v(pos.x, pos.y), b: clampLine(pos, pos2!, CONFIG.NAPALM_MAX_LENGTH), delay: CONFIG.NAPALM_DELAY, t: CONFIG.NAPALM_BURN_S });
       break;
+    case 'smoke': {
+      const b2 = clampLine(pos, pos2!, CONFIG.SMOKE_MAX_LENGTH);
+      const L = dist(pos, b2), n = Math.max(1, Math.round(L / (CONFIG.SMOKE_PUFF_R * 1.2)));
+      for (let i = 0; i <= n; i++) {
+        const q = v(pos.x + ((b2.x - pos.x) * i) / n, pos.y + ((b2.y - pos.y) * i) / n);
+        state.smokes.push({ pos: q, r: CONFIG.SMOKE_PUFF_R, t: CONFIG.SMOKE_DURATION, max: CONFIG.SMOKE_DURATION });
+      }
+      break;
+    }
     case 'traps':
       state.minefields.push({ side, pos: v(pos.x, pos.y), r: CONFIG.TRAP_RADIUS, charges: CONFIG.TRAP_CHARGES, kind: 'ap' });
       break;
@@ -165,6 +177,7 @@ export function updateAbilities(state: GameState, dt: number): void {
   for (let i = state.supplies.length - 1; i >= 0; i--) { const s = state.supplies[i]!; s.t -= dt; if (s.t <= 0) state.supplies.splice(i, 1); }
   updateFires(state, dt);
   updateMinefields(state, dt);
+  for (let i = state.smokes.length - 1; i >= 0; i--) { const sm = state.smokes[i]!; sm.t -= dt; sm.pos.x += dt * 1.5; if (sm.t <= 0) state.smokes.splice(i, 1); } // drifts east
   for (let i = state.strafes.length - 1; i >= 0; i--) {
     const s = state.strafes[i]!;
     if (s.delay > 0) { s.delay -= dt; continue; }
