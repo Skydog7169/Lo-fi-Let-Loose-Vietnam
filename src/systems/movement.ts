@@ -216,6 +216,13 @@ function smoothPath(g: TerrainGrid, from: Vec, pts: Vec[], vehicle: boolean): Ve
 
 /** Defend marker: occupy the nearest cover within DEFEND_COVER_SEARCH_R, preferring cover-edge
  *  cells that face enemy territory (bible §10.1). Falls back to the marker itself. */
+/** Is this dot standing in a trench or its side's bunker (getting the protection)? */
+export function inDefensiveWorks(state: GameState, d: Dot): boolean {
+  for (const t of state.trenches) if (distToSegment2(d.pos, t.a, t.b) <= CONFIG.TRENCH_HALF_W ** 2) return true;
+  for (const b of state.bunkers) if (b.side === d.side && dist2(b.pos, d.pos) <= CONFIG.BUNKER_R ** 2) return true;
+  return false;
+}
+
 /** Closest point on any trench line within r of p, or null. */
 export function snapToTrench(state: GameState, p: Vec, r: number): Vec | null {
   let best: Vec | null = null, bd = r * r;
@@ -425,8 +432,13 @@ export function updateMovement(state: GameState, dt: number): void {
       }
       if (pinned) continue;
       if (dot.targetId >= 0) {
-        // Defenders halt where they stand; attackers keep closing on their target until comfortably inside range.
-        if (!squad.marker || squad.marker.kind !== 'attack' || squad.fallback) continue;
+        // Defenders halt and fight where they stand — unless the circle is being taken, in which case
+        // defenders OUTSIDE the works surge in to contest. Dots inside a trench/bunker are bound to it:
+        // they keep the buff and fight from the position, they never wander toward targets.
+        if (!squad.marker || squad.fallback) continue;
+        if (squad.marker.kind !== 'attack') {
+          if (!isAssaultingPoint(state, squad) || (!vehicle && inDefensiveWorks(state, dot))) continue;
+        }
         const tgt = state.dots[dot.targetId]!;
         // with local superiority, keep pushing in (overrun range); otherwise hold at normal engagement distance.
         // Tanks are mobile guns: they stand off near max range and never push.

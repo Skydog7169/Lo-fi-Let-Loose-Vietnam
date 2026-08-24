@@ -143,6 +143,9 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
     const attacking = vs.pub.mode === 'warfare'
       ? activePt === undefined || activePt.owner !== side
       : side === 'US';
+    const ownedPoints = vs.pub.points.filter((q) => q.owner === side).length;
+    // backs to the wall: cancel the infiltration game and mass the defense
+    if (!attacking && ownedPoints <= 2 && infiltratorId !== null) { infiltratorId = null; }
     const towardEnemy = side === 'US' ? 1 : -1;
     // ---- (1) keep N squads on the active point ----
     const pointSquads = onField
@@ -151,7 +154,7 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
       .sort((a, b) => a.d - b.d)
       // 3 squads assault the circle; the rest support from the flanks — a whole army in one 60px
       // circle is a splash-damage jackpot (HE/arty multi-kills), not a stronger attack
-      .slice(0, attacking ? 3 : CONFIG.AI_POINT_SQUADS)
+      .slice(0, attacking ? 3 : ownedPoints <= 2 ? 99 : CONFIG.AI_POINT_SQUADS)
       .map((x) => x.s);
     const pointIds = new Set(pointSquads.map((s) => s.id));
     // counter-attack: if the enemy is winning the circle, defenders assault the point instead of sitting on markers

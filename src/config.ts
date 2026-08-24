@@ -204,6 +204,7 @@ export const CONFIG = {
   OP_TOUCH_R: 30, // enemy dot this close deletes the OP
   OP_SLOW_SPEED: 8, // px/s centroid speed below which a squad counts as stationary
   WAVE_SECONDS: 20,
+  LAST_STAND_WAVE_MULT: 0.5, // a side holding ≤1 point respawns in half-time waves — reserves rush to the collapse
   MANPOWER_PER_SOLDIER: 5,
   HQ_SPAWN_SPREAD: 30,
   RESPAWN_REJOIN: true, // respawned dots path back to their squad

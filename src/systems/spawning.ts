@@ -139,7 +139,7 @@ function updateWaves(state: GameState, dt: number): void {
   for (const side of ['US', 'PAVN'] as Side[]) {
     state.waveTimer[side] -= dt;
     if (state.waveTimer[side] > 0) continue;
-    state.waveTimer[side] = CONFIG.WAVE_SECONDS;
+    state.waveTimer[side] = CONFIG.WAVE_SECONDS * (state.points.filter((q) => q.owner === side).length <= 1 ? CONFIG.LAST_STAND_WAVE_MULT : 1);
     const res = state.res[side];
     for (const sq of squadsInOrder(state)) {
       if (sq.side !== side || sq.kind === 'artillery') continue;

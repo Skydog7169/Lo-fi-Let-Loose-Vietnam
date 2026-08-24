@@ -132,6 +132,11 @@ function drawOverlay(ctx: CanvasRenderingContext2D, state: GameState, ui: UiStat
       text(ctx, `${s.padEnd(6)}  ${(st.pointHeldTime / 60).toFixed(1).padStart(9)}  ${String(st.casualties).padStart(10)}  ${String(st.garrisonsLost).padStart(14)}`, W / 2, y, sideColor(s), '11px monospace', 'center');
       y += 18;
     }
+    // what killed people (both sides pooled): small-arms 210 · tank HE 80 · napalm 12 …
+    const pool: Record<string, number> = {};
+    for (const s2 of sides) for (const [k, n] of Object.entries(state.stats[s2].deathsBy)) pool[k] = (pool[k] ?? 0) + n;
+    const causes = Object.entries(pool).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, n]) => `${k} ${n}`).join(' · ');
+    if (causes) text(ctx, `killed by: ${causes}`, W / 2, H / 2 + 44, C.hudDim, '10px monospace', 'center');
     text(ctx, 'reload to play again', W / 2, H / 2 + 70, C.hudDim, '10px monospace', 'center');
   }
 }
