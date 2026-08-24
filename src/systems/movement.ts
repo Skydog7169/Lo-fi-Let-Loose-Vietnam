@@ -242,11 +242,15 @@ function defendSpot(state: GameState, squad: Squad, marker: Vec): Vec {
   return best ?? marker;
 }
 
-/** Is this squad's attack flag on (or next to) the contested point? */
+/** Is this squad fighting FOR the contested circle? Attack flag on the point = assault it;
+ *  defend flag next to the point while the enemy is inside the circle = surge in and contest. */
 export function isAssaultingPoint(state: GameState, squad: Squad): boolean {
-  if (!squad.marker || squad.marker.kind !== 'attack' || state.active >= state.map.points.length || state.active < 0) return false;
+  if (!squad.marker || state.active >= state.map.points.length || state.active < 0) return false;
   const p = state.map.points[state.active]!.pos;
-  return dist(squad.marker.pos, p) <= CONFIG.POINT_RADIUS + CONFIG.ASSAULT_R;
+  if (dist(squad.marker.pos, p) > CONFIG.POINT_RADIUS + CONFIG.ASSAULT_R) return false;
+  if (squad.marker.kind === 'attack') return true;
+  const enemyIn = squad.side === 'US' ? state.circleCount.pavn : state.circleCount.us;
+  return enemyIn > 0; // defenders leave their holes only when the point is actually being taken
 }
 
 /** A visible enemy garrison/OP within SPAWN_HUNT_R of `goal` — squads walk onto those and kill them. */

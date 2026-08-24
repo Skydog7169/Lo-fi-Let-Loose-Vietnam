@@ -4,7 +4,7 @@ import { makeCommander } from './commander';
 import { type Side } from './state';
 import { createInitialState } from './scenarios';
 import { stepSim, TICK_DT } from './sim';
-import { attachInput, createUiState, updateViewport } from './ui/input';
+import { toast, attachInput, createUiState, updateViewport } from './ui/input';
 import { drawHud } from './ui/hud';
 import { buildStaticLayer, drawWorld } from './render/draw';
 import { profilePaths, runAiMatch, runMany, runScenario } from './devtools';
@@ -57,6 +57,7 @@ attachInput(canvas, () => state, ui, commanders);
 
 let last = performance.now();
 let acc = 0;
+const watched = { garrisonsLost: 0, active: -99, owners: '' };
 let fps = 0;
 function frame(now: number): void {
   let dt = (now - last) / 1000;
@@ -65,6 +66,27 @@ function frame(now: number): void {
   fps = fps * 0.9 + (1 / Math.max(dt, 1e-6)) * 0.1;
   acc += dt;
   if (ui.toast) { ui.toast.t -= dt; if (ui.toast.t <= 0) ui.toast = null; }
+  // battlefield event feedback: sector flips and garrison losses
+  {
+    const st = state;
+    const myLost = st.stats[ui.player].garrisonsLost;
+    if (myLost > watched.garrisonsLost && st.phase === 'play') toast(ui, myLost - watched.garrisonsLost > 1 ? `${myLost - watched.garrisonsLost} GARRISONS DESTROYED` : 'GARRISON DESTROYED', 3.5);
+    watched.garrisonsLost = myLost;
+    const owners = st.points.map((p) => p.owner ?? 'n').join(',');
+    if (st.active !== watched.active && st.phase === 'play') {
+      if (watched.active >= 0 && watched.active < st.points.length) {
+        const p = st.points[watched.active]!;
+        const name = st.map.points[watched.active]!.name;
+        const prevOwner = watched.owners.split(',')[watched.active];
+        if (p.owner === ui.player && prevOwner !== ui.player) toast(ui, `${name} SECURED — front advances`, 3.5);
+        else if (p.owner && p.owner !== ui.player && prevOwner === ui.player) toast(ui, `${name} LOST — spawns in the sector are gone, fall back`, 4);
+        else if (p.owner && p.owner !== ui.player) toast(ui, `Attack on ${name} repelled — the front falls back`, 3.5);
+        else if (p.owner === ui.player) toast(ui, `Enemy attack on ${name} repelled — front advances`, 3.5);
+      }
+      watched.active = st.active;
+    }
+    watched.owners = owners;
+  }
   while (acc >= TICK_DT) {
     tickOnce();
     acc -= TICK_DT;

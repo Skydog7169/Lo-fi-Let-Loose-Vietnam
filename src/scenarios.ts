@@ -203,9 +203,16 @@ export const SCENARIOS: Record<string, (s: GameState) => void> = {
 };
 
 export function autoPlaceUsGarrisons(s: GameState): void {
-  garrison(s, 'US', 60, 300);
-  garrison(s, 'US', 60, 520);
-  garrison(s, 'US', 130, 300);
+  if (s.mode === 'warfare') {
+    // one spawn per owned sector — the sector-wipe rule punishes clustering
+    garrison(s, 'US', 60, 300); // HQ rear
+    garrison(s, 'US', 290, 480); // point-1 sector
+    garrison(s, 'US', 385, 295); // point-2 sector
+  } else {
+    garrison(s, 'US', 60, 300);
+    garrison(s, 'US', 60, 520);
+    garrison(s, 'US', 130, 300);
+  }
 }
 
 export function createInitialState(seed: number, scenario: string = CONFIG.SCENARIO): GameState {

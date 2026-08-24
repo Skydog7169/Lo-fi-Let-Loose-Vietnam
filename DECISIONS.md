@@ -87,3 +87,11 @@ Ambiguities resolved while building. Each is the simplest reading of the bible, 
 - **Dot legibility:** `DOT_RADIUS` 2.5 with a `DOT_MIN_SCREEN_PX` floor (2.4) — zoomed out, dots render at a fixed minimum screen size instead of vanishing.
 - **50-a-side roster (HLL company):** the draft caps *troops*, not squads — `ROSTER_CAP` 50 with `PERSONNEL` costs (6 infantry/AT squad, 2 recon team, 3 tank crew). Recon squads are 2-man teams now; a tank respawn also draws a 3-man crew from Manpower. Draft UI shows cost·troops per row and a troops X/50 total.
 - **Armor beefed** (it costs 250 WB + 3 crew): TANK_HP 720, HE 62 dmg / 20 px splash, range 160. The AT-ambush counter still wins the 'tank' scenario 2:1 (40/60) — a tank that blunders into concealed AT dies, but it takes a committed ambush rather than a skirmish.
+
+## Polish pass (playtesting session)
+
+- **Defenders contest the circle:** a defend flag within `ASSAULT_R` of the contested point makes the squad surge into the circle whenever enemies are inside it (before, defenders halted at firing range just *outside* the 60 px circle and watched the cap tick). Same scripted match went from a 6-minute collapse to 24 minutes of An Cuong changing hands.
+- **Event toasts:** sector secured / sector lost (with the spawns-wiped warning) / attack repelled / garrison destroyed.
+- **AI rebuilds its garrison net** toward 3 whenever WB is flush (it was banking 1300+ WB while attacking).
+- **Auto-setup (`?setup=0`) spreads garrisons one per owned sector** — clustering them died horribly to a single sector wipe.
+- **Map art pass** (all in the prerendered static layer): paddy plot grid with dike lines, woods canopy blobs + treeline edge, sandy river banks + waterline, road shoulders, building drop shadows + roof ridges, grass sun-patches, marsh pools, paper grain, edge vignette, quieter grid.

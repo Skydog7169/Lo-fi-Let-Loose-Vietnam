@@ -148,6 +148,7 @@ export interface GameState {
   points: PointState[];
   active: number; // index into points of the contested point (or points.length when all taken)
   contestClearT: number; // seconds the contested circle has been free of attackers (warfare front reset)
+  circleCount: { us: number; pavn: number }; // dots inside the contested circle (updated by capture each tick)
   garrisons: Garrison[];
   res: Record<Side, Resources>;
   waveTimer: Record<Side, number>;
@@ -269,6 +270,7 @@ export function createEmptyState(seed: number, scenario: string, mode: 'warfare'
     mode,
     active: mode === 'warfare' ? Math.floor(map.points.length / 2) : 0,
     contestClearT: 0,
+    circleCount: { us: 0, pavn: 0 },
     garrisons: [],
     res: {
       US: { wb: CONFIG.START_WB, mun: CONFIG.START_MUN, man: CONFIG.START_MAN, fuel: CONFIG.START_FUEL },

@@ -339,7 +339,7 @@ export const CONFIG = {
     bridge: '#8c6f4c',
     ford: '#7da3c4',
     hq: '#b9a97a',
-    grid: 'rgba(0,0,0,0.18)',
+    grid: 'rgba(0,0,0,0.10)',
     gridLabel: 'rgba(0,0,0,0.45)',
     us: '#3c8cff',
     pavn: '#e8473c',

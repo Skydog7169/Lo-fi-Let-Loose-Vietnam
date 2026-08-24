@@ -51,23 +51,58 @@ export function buildStaticLayer(map: MapData): HTMLCanvasElement {
   ctx.fillStyle = C.open;
   ctx.fillRect(0, 0, map.width, map.height);
 
-  // faint paddy texture: horizontal hairlines on open ground
-  ctx.strokeStyle = 'rgba(0,0,0,0.05)';
-  ctx.lineWidth = 1;
-  for (let y = 6; y < map.height; y += 12) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(map.width, y); ctx.stroke(); }
+  // paddy plots: an irregular field grid in shifting tones with faint dike lines
+  let pseed = 11;
+  const prnd = () => { pseed = (pseed * 1103515245 + 12345) & 0x7fffffff; return pseed / 0x7fffffff; };
+  for (let y = 0; y < map.height; ) {
+    const rh = 34 + prnd() * 44;
+    for (let x = 0; x < map.width; ) {
+      const rw = 52 + prnd() * 78;
+      const t = prnd();
+      if (t < 0.30) ctx.fillStyle = 'rgba(70,60,30,0.045)';
+      else if (t < 0.55) ctx.fillStyle = 'rgba(255,250,220,0.05)';
+      else ctx.fillStyle = 'transparent';
+      if (ctx.fillStyle !== 'transparent') ctx.fillRect(x, y, rw, rh);
+      x += rw;
+    }
+    // dike line between plot rows
+    ctx.strokeStyle = 'rgba(90,75,45,0.10)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, y + rh); ctx.lineTo(map.width, y + rh); ctx.stroke();
+    y += rh;
+  }
 
   for (const r of map.regions) {
     const s = r.shape;
     traceShape(ctx, s);
     switch (r.terrain) {
-      case 'woods': ctx.fillStyle = C.woods; ctx.fill(); break;
+      case 'woods':
+        ctx.fillStyle = C.woods; ctx.fill();
+        ctx.strokeStyle = 'rgba(18,34,14,0.4)'; ctx.lineWidth = 2; ctx.stroke(); // treeline edge
+        break;
       case 'village':
+        if (s.kind === 'rect') { ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(s.x + 2.5, s.y + 3, s.w, s.h); } // drop shadow
+        traceShape(ctx, s);
         ctx.fillStyle = C.village; ctx.fill();
         ctx.strokeStyle = C.villageEdge; ctx.lineWidth = 1.5; ctx.stroke();
+        if (s.kind === 'rect') { // roof ridge
+          ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 1;
+          ctx.beginPath();
+          if (s.w >= s.h) { ctx.moveTo(s.x + 3, s.y + s.h / 2); ctx.lineTo(s.x + s.w - 3, s.y + s.h / 2); }
+          else { ctx.moveTo(s.x + s.w / 2, s.y + 3); ctx.lineTo(s.x + s.w / 2, s.y + s.h - 3); }
+          ctx.stroke();
+        }
         break;
-      case 'river': ctx.fillStyle = C.river; ctx.fill(); break;
+      case 'river':
+        ctx.strokeStyle = '#cbbd90'; ctx.lineWidth = 7; ctx.lineJoin = 'round'; ctx.stroke(); // sandy banks
+        ctx.fillStyle = C.river; ctx.fill();
+        ctx.strokeStyle = 'rgba(15,35,65,0.35)'; ctx.lineWidth = 1.5; ctx.stroke(); // waterline
+        break;
       case 'road':
-        if (s.kind === 'stroke') { ctx.strokeStyle = C.road; ctx.lineWidth = s.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); }
+        if (s.kind === 'stroke') {
+          ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          ctx.strokeStyle = 'rgba(60,48,25,0.22)'; ctx.lineWidth = s.width + 2.5; ctx.stroke(); // graded shoulder
+          ctx.strokeStyle = C.road; ctx.lineWidth = s.width; ctx.stroke();
+        }
         break;
       case 'trail':
         if (s.kind === 'stroke') {
@@ -105,12 +140,26 @@ export function buildStaticLayer(map: MapData): HTMLCanvasElement {
     if (r.terrain !== 'grass' && r.terrain !== 'marsh') continue;
     const b = shapeBounds(r.shape);
     if (r.terrain === 'grass') {
+      ctx.save(); traceShape(ctx, r.shape); ctx.clip();
+      ctx.fillStyle = 'rgba(210,215,140,0.12)'; // sun patches
+      for (let i = 0; i < (b.x1 - b.x0) * (b.y1 - b.y0) / 3200; i++) {
+        const x = b.x0 + ((i * 97) % (b.x1 - b.x0)), y = b.y0 + ((i * 53) % (b.y1 - b.y0));
+        ctx.beginPath(); ctx.ellipse(x, y, 14, 8, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
       ctx.strokeStyle = 'rgba(60,70,30,0.35)'; ctx.lineWidth = 1;
       for (let y = b.y0 + 4; y < b.y1; y += 9) for (let x = b.x0 + 4 + (((y / 9) | 0) % 2) * 4; x < b.x1; x += 9) {
         if (!pointInShape({ x, y }, r.shape)) continue;
         ctx.beginPath(); ctx.moveTo(x, y + 2); ctx.lineTo(x, y - 2); ctx.stroke();
       }
     } else {
+      ctx.save(); traceShape(ctx, r.shape); ctx.clip();
+      ctx.fillStyle = 'rgba(70,110,135,0.30)'; // standing water pools
+      for (let i = 0; i < (b.x1 - b.x0) * (b.y1 - b.y0) / 2400; i++) {
+        const x = b.x0 + ((i * 89) % (b.x1 - b.x0)), y = b.y0 + ((i * 61) % (b.y1 - b.y0));
+        ctx.beginPath(); ctx.ellipse(x, y, 10 + (i % 3) * 4, 5 + (i % 2) * 2, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
       ctx.strokeStyle = 'rgba(60,100,130,0.4)'; ctx.lineWidth = 1;
       for (let y = b.y0 + 5; y < b.y1; y += 10) for (let x = b.x0 + 4; x < b.x1; x += 14) {
         if (!pointInShape({ x, y }, r.shape)) continue;
@@ -118,8 +167,7 @@ export function buildStaticLayer(map: MapData): HTMLCanvasElement {
       }
     }
   }
-  // woods texture: sparse darker stipple
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  // woods canopy: clustered crown blobs, dark understorey + lit tops
   let seed = 7;
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
   for (const r of map.regions) {
@@ -128,11 +176,17 @@ export function buildStaticLayer(map: MapData): HTMLCanvasElement {
     if (s.kind !== 'poly') continue;
     const xs = s.pts.map((p) => p.x), ys = s.pts.map((p) => p.y);
     const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    const count = ((x1 - x0) * (y1 - y0)) / 220;
+    const count = ((x1 - x0) * (y1 - y0)) / 420;
     ctx.save(); traceShape(ctx, s); ctx.clip();
     for (let i = 0; i < count; i++) {
       const x = x0 + rnd() * (x1 - x0), y = y0 + rnd() * (y1 - y0);
-      ctx.beginPath(); ctx.arc(x, y, 1.6, 0, Math.PI * 2); ctx.fill();
+      const cr = 2.5 + rnd() * 5;
+      ctx.fillStyle = 'rgba(0,0,0,0.14)';
+      ctx.beginPath(); ctx.arc(x + 1, y + 1.5, cr, 0, Math.PI * 2); ctx.fill(); // crown shadow
+      ctx.fillStyle = rnd() < 0.5 ? 'rgba(96,140,80,0.35)' : 'rgba(70,110,60,0.35)';
+      ctx.beginPath(); ctx.arc(x, y, cr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(150,190,110,0.18)';
+      ctx.beginPath(); ctx.arc(x - cr * 0.3, y - cr * 0.35, cr * 0.5, 0, Math.PI * 2); ctx.fill(); // lit top
     }
     ctx.restore();
   }
@@ -168,6 +222,19 @@ export function buildStaticLayer(map: MapData): HTMLCanvasElement {
     ctx.fillStyle = C.pointRing; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(String(p.id), p.pos.x, p.pos.y);
     ctx.font = 'bold 9px monospace'; ctx.fillText(p.name, p.pos.x, p.pos.y + 14);
+  }
+  // paper grain + a quiet edge vignette to pull it together
+  for (let i = 0; i < 2600; i++) {
+    const x = rnd() * map.width, y = rnd() * map.height;
+    ctx.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)';
+    ctx.fillRect(x, y, 1 + rnd(), 1 + rnd());
+  }
+  const vg = 60;
+  const grads: [number, number, number, number][] = [[0, 0, 0, vg], [0, map.height, 0, map.height - vg], [0, 0, vg, 0], [map.width, 0, map.width - vg, 0]];
+  for (const [gx0, gy0, gx1, gy1] of grads) {
+    const g = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
+    g.addColorStop(0, 'rgba(30,25,10,0.14)'); g.addColorStop(1, 'rgba(30,25,10,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, map.width, map.height);
   }
   return cv;
 }

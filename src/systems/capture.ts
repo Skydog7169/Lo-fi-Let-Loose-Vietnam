@@ -16,6 +16,7 @@ export function updateCapture(state: GameState, dt: number): void {
     if (dist2(d.pos, pm.pos) > r2) continue;
     if (d.side === 'US') us++; else pavn++;
   }
+  state.circleCount.us = us; state.circleCount.pavn = pavn;
   // tanks count as one body; infantry dots each count as one — superiority is raw count
   const diff = Math.max(-CONFIG.CAPTURE_MAX_SUPERIORITY, Math.min(CONFIG.CAPTURE_MAX_SUPERIORITY, us - pavn));
   // moving progress back toward 0 (undoing the enemy's work) is slower than pushing your own

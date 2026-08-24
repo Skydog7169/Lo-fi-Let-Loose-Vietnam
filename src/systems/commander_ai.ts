@@ -227,8 +227,10 @@ export function makeCommanderAi(side: Side, cmd: CommanderInterface, map: MapDat
       cmd.buyAbility('recon', at);
       lastContact = time; // don't spam
     }
-    // ---- (4) garrison when down to 1 ----
-    if (vs.own.garrisons.length <= 1 && vs.own.cooldowns.garrison <= 0 && vs.own.res.wb >= CONFIG.ABILITY.garrison!.cost) {
+    // ---- (4) rebuild the garrison net: urgent below 2; keep building toward 3 when WB is flush ----
+    const wantGarrison = vs.own.garrisons.length <= 1
+      || (vs.own.garrisons.length < 3 && vs.own.res.wb >= CONFIG.ABILITY.garrison!.cost + 250);
+    if (wantGarrison && vs.own.cooldowns.garrison <= 0 && vs.own.res.wb >= CONFIG.ABILITY.garrison!.cost) {
       const ideal = v(behindLine(vs, CONFIG.AI_FORWARD_GARRISON_DIST), activePos.y);
       if (!garrisonSpot) garrisonSpot = garrisonSpotNear(vs, ideal);
       if (garrisonSpot) {
