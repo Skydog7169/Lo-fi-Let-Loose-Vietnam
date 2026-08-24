@@ -5,6 +5,7 @@ import { cellCenter, cellOf, concealsAt, isCoverAt, isWalkable } from '../map/gr
 import { aliveDots, isVehicle, type Dot, type GameState, type Side, type Squad } from '../state';
 import { dist2, norm, sub, v, type Vec } from '../vec';
 import { rand } from '../rng';
+import { structureSpots } from './movement';
 import { pushEffect, squadCentroid, squadsInOrder } from '../state';
 
 /** Can this shooter hurt that target at all? Small arms never damage armour (bible §9.4). */
@@ -187,7 +188,12 @@ export function updateSquadAi(state: GameState): void {
     const vehicle = isVehicle(squad.kind);
     for (const d of alive) {
       if (d.targetId >= 0 && !d.coverSeek && !vehicle && !isCoverAt(state.grid, d.pos)) {
-        d.coverSeek = nearbyCover(state, d.pos, vehicle);
+        // nearest of terrain cover or a built defense (own bunker / any trench)
+        let seek = nearbyCover(state, d.pos, vehicle);
+        for (const q of structureSpots(state, d.side, d.pos, CONFIG.COVER_SEEK_R)) {
+          if (!seek || dist2(q, d.pos) < dist2(seek, d.pos)) seek = v(q.x, q.y);
+        }
+        d.coverSeek = seek;
       }
       // idle defenders face the likely threat
       if (d.targetId < 0 && d.wp >= squad.path.length && !d.coverSeek) { const td = threatDirection(state, squad, d.pos); d.facing = Math.atan2(td.y, td.x); }

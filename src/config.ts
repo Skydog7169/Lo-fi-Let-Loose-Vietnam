@@ -158,6 +158,7 @@ export const CONFIG = {
   ARTY_HP: 300,
   // defend marker
   DEFEND_COVER_SEARCH_R: 100, // occupy nearest cover within this radius of a defend marker
+  DEFEND_STRUCTURE_BONUS: 35, // defend spots prefer trenches/bunkers over bare cover by this margin (px)
   DEFEND_EDGE_BONUS: 60, // px-equivalent preference for cover cells on the edge facing the enemy
   // effects
   TRACER_TTL: 0.12,
@@ -219,13 +220,13 @@ export const CONFIG = {
   START_FUEL: 150,
 
   // ---- Draft (bible §3.2) ----
-  DRAFT_BUDGET_WB: 1000,
+  DRAFT_BUDGET_WB: 1300, // fits ~2 more squads or another tank vs the original 1000
   UNIT_COST: { infantry: 100, at: 150, recon: 125, tank: 250, artillery: 200 } as Record<string, number>, // artillery is no longer draftable (barrage ability only)
   ROSTER_CAP: 50, // HLL company: 50 troops a side (100 on the field)
   SQUAD_SLOTS: 6, // legacy (no longer enforced)
   TANK_CAP: 2,
   ARTILLERY_CAP: 0, // batteries removed from the draft; artillery = the Barrage order
-  AI_DRAFT: { infantry: 3, at: 1, recon: 1, tank: 1, artillery: 0 } as Record<string, number>, // 3×100+150+125+250 = 825 → 175 WB carried
+  AI_DRAFT: { infantry: 5, at: 1, recon: 1, tank: 1, artillery: 0 } as Record<string, number>, // 1025 WB, 41 troops
   TANK_RESPAWN_FUEL: 150, // Fuel per tank respawn (at the HQ, on the wave)
   TANK_RESPAWNS_PER_SLOT: 99, // bible says 1; playtest wanted tanks back in the fight
 
@@ -243,15 +244,16 @@ export const CONFIG = {
   } as Record<string, { cost: number; pool: 'wb' | 'mun' | 'man' | 'fuel'; cooldown: number }>,
   // ---- Deployable defenses (playtest addition) ----
   WIRE_MAX_LENGTH: 120,
-  WIRE_SLOW_MULT: 0.25, // infantry crossing wire move at this fraction (vehicles crush it at 0.8)
+  WIRE_SLOW_MULT: 0.12, // infantry all but stop in the wire (vehicles crush it at 0.8)
   WIRE_VEHICLE_MULT: 0.8,
-  WIRE_HALF_W: 4,
+  WIRE_HALF_W: 6,
   WIRE_HP: 150, // destroyed by arty shells / tank HE splash
   TRENCH_MAX_LENGTH: 100,
-  TRENCH_HALF_W: 6,
+  TRENCH_HALF_W: 9,
+  TRENCH_SNAP_R: 26, // defending dots this close to a trench line take position in it
   TRENCH_HIT_MULT: 0.6, // cover-grade protection for any dot in the trench (either side); flanking bypasses
   TRENCH_DMG_MULT: 0.7,
-  BUNKER_R: 16, // friendly dots this close to the bunker fight from it
+  BUNKER_R: 22, // friendly dots this close to the bunker fight from it
   BUNKER_HIT_MULT: 0.45, // stronger than cover, and flanking does NOT bypass it
   BUNKER_DMG_MULT: 0.6,
   BUNKER_HP: 400, // shelled by tanks/AT/arty like a garrison

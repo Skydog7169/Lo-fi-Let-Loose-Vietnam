@@ -16,7 +16,7 @@ const NOTES: Record<SquadKind, string> = {
 };
 
 export interface DraftUi { comp: Record<SquadKind, number>; done: boolean }
-export const defaultDraft = (): Record<SquadKind, number> => ({ infantry: 4, at: 1, recon: 0, tank: 1, artillery: 0 });
+export const defaultDraft = (): Record<SquadKind, number> => ({ infantry: 6, at: 1, recon: 1, tank: 1, artillery: 0 }); // 1250 WB of 1300, 47 of 50 troops
 
 const PX = 290, PY = 150, PW = 620, ROW_H = 48, ROW0 = PY + 96, ROWS = 4;
 function rowRect(i: number) { return { y: ROW0 + i * ROW_H }; }

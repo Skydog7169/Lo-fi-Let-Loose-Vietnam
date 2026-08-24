@@ -2,8 +2,8 @@
 // smoothing) + per-dot movement with terrain speed, formation slots and separation.
 import { CONFIG } from '../config';
 import { cellCenter, cellOf, isWalkable, speedAt, type TerrainGrid } from '../map/grid';
-import { formationOffset, squadCentroid, squadsInOrder, type Dot, type GameState, type Squad } from '../state';
-import { dist, distToSegment2, norm, sub, v, type Vec } from '../vec';
+import { formationOffset, squadCentroid, squadsInOrder, type Dot, type GameState, type Side, type Squad } from '../state';
+import { dist, dist2, distToSegment2, norm, sub, v, type Vec } from '../vec';
 import { rangeFor, threatDirection } from './squad_ai';
 
 // ---------- A* ----------
@@ -216,6 +216,37 @@ function smoothPath(g: TerrainGrid, from: Vec, pts: Vec[], vehicle: boolean): Ve
 
 /** Defend marker: occupy the nearest cover within DEFEND_COVER_SEARCH_R, preferring cover-edge
  *  cells that face enemy territory (bible §10.1). Falls back to the marker itself. */
+/** Closest point on any trench line within r of p, or null. */
+export function snapToTrench(state: GameState, p: Vec, r: number): Vec | null {
+  let best: Vec | null = null, bd = r * r;
+  for (const t of state.trenches) {
+    const dx = t.b.x - t.a.x, dy = t.b.y - t.a.y;
+    const l2 = dx * dx + dy * dy;
+    let u = l2 > 0 ? ((p.x - t.a.x) * dx + (p.y - t.a.y) * dy) / l2 : 0;
+    u = u < 0 ? 0 : u > 1 ? 1 : u;
+    const q = v(t.a.x + u * dx, t.a.y + u * dy);
+    const d2 = dist2(p, q);
+    if (d2 < bd) { bd = d2; best = q; }
+  }
+  return best;
+}
+
+/** Built defenses (own bunkers, any trench) near p — squads treat them like cover to occupy. */
+export function structureSpots(state: GameState, side: Side, p: Vec, R: number): Vec[] {
+  const out: Vec[] = [];
+  const R2 = R * R;
+  for (const b of state.bunkers) if (b.side === side && dist2(b.pos, p) <= R2) out.push(b.pos);
+  for (const t of state.trenches) {
+    // sample points along the trench line
+    const L = dist(t.a, t.b), n = Math.max(1, Math.floor(L / 14));
+    for (let i = 0; i <= n; i++) {
+      const q = v(t.a.x + ((t.b.x - t.a.x) * i) / n, t.a.y + ((t.b.y - t.a.y) * i) / n);
+      if (dist2(q, p) <= R2) out.push(q);
+    }
+  }
+  return out;
+}
+
 function defendSpot(state: GameState, squad: Squad, marker: Vec): Vec {
   const g = state.grid;
   const R = CONFIG.DEFEND_COVER_SEARCH_R;
@@ -238,6 +269,11 @@ function defendSpot(state: GameState, squad: Squad, marker: Vec): Vec {
     const isEdge = ec < 0 || ec >= g.cols || er < 0 || er >= g.rows || !g.cover[er * g.cols + ec];
     const score = d + (isEdge ? 0 : CONFIG.DEFEND_EDGE_BONUS);
     if (score < bestScore) { best = q; bestScore = score; }
+  }
+  // built defenses beat terrain cover at equal distance: bunkers strongly, trenches slightly
+  for (const q of structureSpots(state, squad.side, marker, R)) {
+    const score = dist(q, marker) - CONFIG.DEFEND_STRUCTURE_BONUS;
+    if (score < bestScore) { best = v(q.x, q.y); bestScore = score; }
   }
   return best ?? marker;
 }
@@ -394,6 +430,11 @@ export function updateMovement(state: GameState, dt: number): void {
         const off = formationOffset(dot.slot, n, squad.heading);
         target = v(wpPos.x + off.x, wpPos.y + off.y);
         if (!isWalkable(g, target, vehicle)) target = wpPos;
+        // man the trench: on a defend flag, final positions string out along a nearby trench line
+        if (isLast && !vehicle && squad.marker?.kind === 'defend') {
+          const tq = snapToTrench(state, target, CONFIG.TRENCH_SNAP_R);
+          if (tq) target = tq;
+        }
         arriveR = isLast ? CONFIG.MARKER_ARRIVE_R : CONFIG.WAYPOINT_ARRIVE_R;
       }
       const toT = sub(target, dot.pos);

@@ -116,6 +116,23 @@ export const SCENARIOS: Record<string, (s: GameState) => void> = {
     place(s, 'US', 'infantry', 'A', v(640, 250), { kind: 'attack', pos: v(940, 250) });
     place(s, 'PAVN', 'infantry', 'A', v(940, 250), { kind: 'attack', pos: v(640, 250) });
   },
+  /** Trench line: two US squads man a trench in the open; two PAVN squads attack frontally across open ground. */
+  trenchline(s) {
+    combatOnly(s);
+    s.trenches.push({ side: 'US', a: sc(v(520, 210)), b: sc(v(520, 310)) });
+    place(s, 'US', 'infantry', 'A', v(510, 230), { kind: 'defend', pos: v(516, 235) });
+    place(s, 'US', 'infantry', 'B', v(510, 280), { kind: 'defend', pos: v(516, 285) });
+    place(s, 'PAVN', 'infantry', 'A', v(700, 230), { kind: 'attack', pos: v(530, 235) });
+    place(s, 'PAVN', 'infantry', 'B', v(700, 280), { kind: 'attack', pos: v(530, 285) });
+  },
+  /** Control for trenchline: same fight, no trench. */
+  trenchline_bare(s) {
+    combatOnly(s);
+    place(s, 'US', 'infantry', 'A', v(510, 230), { kind: 'defend', pos: v(516, 235) });
+    place(s, 'US', 'infantry', 'B', v(510, 280), { kind: 'defend', pos: v(516, 285) });
+    place(s, 'PAVN', 'infantry', 'A', v(700, 230), { kind: 'attack', pos: v(530, 235) });
+    place(s, 'PAVN', 'infantry', 'B', v(700, 280), { kind: 'attack', pos: v(530, 285) });
+  },
   /** Dig-in: a US squad holds a defend flag in the open paddy for 30 s (entrenches), then an equal PAVN squad attacks across open ground. */
   dugin(s) {
     combatOnly(s);
