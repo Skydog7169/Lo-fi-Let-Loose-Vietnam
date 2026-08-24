@@ -57,7 +57,7 @@ export const CONFIG = {
   SQUAD_SIZE: { infantry: 6, at: 6, recon: 4, tank: 1, artillery: 1 } as Record<string, number>,
   DOT_HP: 100,
   TANK_HP: 600,
-  DOT_RADIUS: 2.5,
+  DOT_RADIUS: 2,
   FORMATION_WIDTH: 9, // wedge: lateral step per rank (px)
   FORMATION_DEPTH: 8, // wedge: rank depth behind the leader (px)
   DOT_SEPARATION: 10, // px; same-side dots push apart below this
@@ -181,7 +181,7 @@ export const CONFIG = {
 
   // ---- Economy (bible §7), per minute ----
   // base up / per-point down vs the bible so holding 4 points does not out-reinforce the attacker 2:1
-  WB_BASE: 15, WB_PER_POINT: 15,
+  WB_BASE: 25, WB_PER_POINT: 20,
   MUN_BASE: 70, MUN_PER_POINT: 15,
   MAN_BASE: 80, MAN_PER_POINT: 15,
   FUEL_BASE: 70, FUEL_PER_POINT: 15,
@@ -264,9 +264,10 @@ export const CONFIG = {
   // ---- Vision & fog (bible §5) ----
   VISION_INTERVAL_TICKS: 3,
   VISION_INF: 120,
-  VISION_RECON: 200,
+  VISION_RECON: 220,
   VISION_TANK: 120,
   VISION_COVER_MULT: 0.75, // unit vision against targets in cover is reduced to this fraction
+  RECON_STEALTH_MULT: 0.6, // recon dots are spotted only at this fraction of the usual range (sneaky)
   GHOST_SECONDS: 5,
   DEBUG_REVEAL_ALL: false, // F toggles
 

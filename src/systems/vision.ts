@@ -17,12 +17,12 @@ function visionRadius(state: GameState, d: Dot): number {
 }
 
 /** Is world point p (an enemy thing, in cover or not) seen by `side`? */
-function seenBy(state: GameState, side: Side, p: Vec, inCover: boolean, ownDots: Dot[], radii: Float32Array): boolean {
+function seenBy(state: GameState, side: Side, p: Vec, inCover: boolean, ownDots: Dot[], radii: Float32Array, stealthMult = 1): boolean {
   if (CONFIG.DEBUG_REVEAL_ALL) return true;
-  if (!inCover && inOwnTerritory(state, side, p)) return true;
+  if (!inCover && stealthMult >= 1 && inOwnTerritory(state, side, p)) return true;
   for (const r of state.recons) if (r.side === side && dist2(r.pos, p) <= r.r * r.r) return true; // recon flight sees through cover
   for (let i = 0; i < ownDots.length; i++) {
-    let r = radii[i]!;
+    let r = radii[i]! * stealthMult;
     if (inCover) r *= CONFIG.VISION_COVER_MULT;
     if (dist2(ownDots[i]!.pos, p) <= r * r) return true;
   }
@@ -66,7 +66,8 @@ export function updateVision(state: GameState, dt: number): void {
       }
       const cover = isCoverAt(state.grid, d.pos);
       const firing = state.time - d.firedAt < CONFIG.FIRE_REVEAL_S && enemyNear(d.pos, ownDots, CONFIG.FIRE_REVEAL_R);
-      if (firing || seenBy(state, side, d.pos, cover, ownDots, radii)) { dotVisible[d.id] = 1; vs.enemyDots.push(d); }
+      const stealth = state.squads[d.squadId]!.kind === 'recon' ? CONFIG.RECON_STEALTH_MULT : 1;
+      if (firing || seenBy(state, side, d.pos, cover, ownDots, radii, stealth)) { dotVisible[d.id] = 1; vs.enemyDots.push(d); }
       else if (prevDot[d.id]) {
         vs.ghosts.push({ pos: v(d.pos.x, d.pos.y), side: enemy, t: CONFIG.GHOST_SECONDS, kind: isVehicle(state.squads[d.squadId]!.kind) ? 'tank' : 'dot' });
       }
