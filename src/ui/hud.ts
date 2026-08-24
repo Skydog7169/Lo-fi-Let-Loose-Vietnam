@@ -49,7 +49,11 @@ function drawTopBar(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState
   }
   if (state.active >= 0 && state.active < state.points.length) {
     const us = dotsOnActivePoint(state, 'US'), pv = dotsOnActivePoint(state, 'PAVN');
-    text(ctx, `${state.map.points[state.active]!.name}  ${us}v${pv}`, x0, 36, C.hudDim, '9px monospace');
+    let line = `${state.map.points[state.active]!.name}  ${us}v${pv}`;
+    if (state.mode === 'warfare' && state.contestClearT > 5) {
+      line += `   attack repelled — front resets in ${Math.ceil(CONFIG.FRONT_RESET_SECONDS - state.contestClearT)}s`;
+    }
+    text(ctx, line, x0, 36, state.contestClearT > 5 ? '#f2d27a' : C.hudDim, '9px monospace');
   }
 
   // resources, right side

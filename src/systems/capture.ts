@@ -23,13 +23,31 @@ export function updateCapture(state: GameState, dt: number): void {
   const rate = (diff / CONFIG.CAPTURE_SECONDS_PER_DOT) * (undoing ? CONFIG.CAPTURE_ROLLBACK_MULT : 1);
   const min = state.mode === 'warfare' ? -1 : 0; // offensive: PAVN only rolls back, never flips a point
   ps.progress = Math.max(min, Math.min(1, ps.progress + rate * dt));
-  if (ps.progress >= 1) flipPoint(state, ps, 'US');
-  else if (ps.progress <= -1) flipPoint(state, ps, 'PAVN');
+  // empty circle: partial progress drifts back to neutral
+  if (us === 0 && pavn === 0 && ps.progress !== 0) {
+    const d = Math.sign(ps.progress) * Math.min(Math.abs(ps.progress), CONFIG.CAPTURE_IDLE_DECAY * dt);
+    ps.progress -= d;
+  }
+  if (ps.progress >= 1) { flipPoint(state, ps, 'US'); return; }
+  if (ps.progress <= -1) { flipPoint(state, ps, 'PAVN'); return; }
+  // warfare: an owned point that has repelled its attackers pushes the front back out on its own
+  if (state.mode === 'warfare' && ps.owner) {
+    const attackers = ps.owner === 'US' ? pavn : us;
+    state.contestClearT = attackers === 0 ? state.contestClearT + dt : 0;
+    if (state.contestClearT >= CONFIG.FRONT_RESET_SECONDS) {
+      ps.progress = 0;
+      state.contestClearT = 0;
+      state.active += ps.owner === 'US' ? 1 : -1;
+      if (state.active >= 0 && state.active < state.points.length) state.points[state.active]!.progress = 0;
+      for (const sq of state.squads) sq.defendCache = null;
+    }
+  } else state.contestClearT = 0;
 }
 
 function flipPoint(state: GameState, ps: GameState['points'][number], to: 'US' | 'PAVN'): void {
   ps.owner = to;
   ps.progress = 0;
+  state.contestClearT = 0;
   state.active += to === 'US' ? 1 : -1;
   if (state.active >= 0 && state.active < state.points.length) state.points[state.active]!.progress = 0;
   if (state.mode !== 'warfare') state.timer += CONFIG.CAPTURE_BONUS_SECONDS;

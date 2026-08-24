@@ -147,6 +147,7 @@ export interface GameState {
   mode: 'warfare' | 'offensive';
   points: PointState[];
   active: number; // index into points of the contested point (or points.length when all taken)
+  contestClearT: number; // seconds the contested circle has been free of attackers (warfare front reset)
   garrisons: Garrison[];
   res: Record<Side, Resources>;
   waveTimer: Record<Side, number>;
@@ -267,6 +268,7 @@ export function createEmptyState(seed: number, scenario: string, mode: 'warfare'
     }),
     mode,
     active: mode === 'warfare' ? Math.floor(map.points.length / 2) : 0,
+    contestClearT: 0,
     garrisons: [],
     res: {
       US: { wb: CONFIG.START_WB, mun: CONFIG.START_MUN, man: CONFIG.START_MAN, fuel: CONFIG.START_FUEL },
@@ -317,15 +319,15 @@ export function sectorLineX(state: GameState): number {
 export function territoryEdgeX(state: GameState, side: Side): number {
   if (state.mode !== 'warfare') return sectorLineX(state);
   const pts = state.map.points;
-  if (state.active >= pts.length) return side === 'US' ? state.map.width : state.map.width;
+  if (state.active >= pts.length) return state.map.width;
   if (state.active < 0) return 0;
   const cur = pts[state.active]!.pos.x;
-  if (side === 'US') {
-    const prev = state.active > 0 ? pts[state.active - 1]!.pos.x : state.map.hqs.find((h) => h.side === 'US')!.rect.w;
-    return (prev + cur) / 2;
-  }
-  const next = state.active < pts.length - 1 ? pts[state.active + 1]!.pos.x : state.map.width - state.map.hqs.find((h) => h.side === 'PAVN')!.rect.w;
-  return (next + cur) / 2;
+  const westMid = (cur + (state.active > 0 ? pts[state.active - 1]!.pos.x : state.map.hqs.find((h) => h.side === 'US')!.rect.w)) / 2;
+  const eastMid = (cur + (state.active < pts.length - 1 ? pts[state.active + 1]!.pos.x : state.map.width - state.map.hqs.find((h) => h.side === 'PAVN')!.rect.w)) / 2;
+  // the contested point's sector belongs to whoever OWNS the point — only the attacker is fenced out.
+  const owner = state.points[state.active]!.owner;
+  if (side === 'US') return owner === 'US' ? eastMid : westMid;
+  return owner === 'PAVN' ? westMid : eastMid;
 }
 
 export function inOwnTerritory(state: GameState, side: Side, p: Vec): boolean {

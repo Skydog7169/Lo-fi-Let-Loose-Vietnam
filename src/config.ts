@@ -177,6 +177,8 @@ export const CONFIG = {
   POINT_COUNT: 5,
   CAPTURE_SECONDS_PER_DOT: 60, // 1 dot of superiority captures in this long; rate scales with superiority
   CAPTURE_ROLLBACK_MULT: 0.5, // defender superiority rolls progress back at this fraction of the capture rate
+  CAPTURE_IDLE_DECAY: 0.03, // progress/second drifting back to 0 while the circle is empty
+  FRONT_RESET_SECONDS: 30, // warfare: an owned contested point with no attacker in the circle this long repels the attack — the front moves back
   CAPTURE_MAX_SUPERIORITY: 3, // superiority beyond this does not speed capture
   ASSAULT_R: 40, // an attack flag within this of the active point = assault: dots push into the circle regardless of odds
 
